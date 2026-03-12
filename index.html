@@ -1,0 +1,650 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>캔디 썸10</title>
+  <style>
+    :root {
+      --outer-a: #e8f1ec;
+      --outer-b: #dce8ee;
+      --board-bg: #f7f3ea;
+      --grid-line: #e8dfd2;
+      --num-white: #ffffff;
+      --ink-main: #4f5e5a;
+      --frame-radius: 34px;
+      --cell: 33px;
+      --gap: 3px;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100svh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(160deg, #eef3f1 0%, #e5ecef 100%);
+      font-family: "Trebuchet MS", "Verdana", Arial, sans-serif;
+    }
+
+    .game {
+      width: min(100vw, 760px);
+      border-radius: var(--frame-radius);
+      background: linear-gradient(145deg, var(--outer-a), var(--outer-b));
+      box-shadow: 0 8px 20px #5563841e;
+      border: 1px solid #ffffffc0;
+      padding: 54px 22px 12px;
+      position: relative;
+    }
+
+    .play-wrap {
+      display: grid;
+      grid-template-columns: 1fr 22px;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .board-stage {
+      position: relative;
+      width: fit-content;
+      height: fit-content;
+    }
+
+    .board {
+      border-radius: 18px;
+      border: 1px solid #d5cec2;
+      background-color: var(--board-bg);
+      background-image:
+        radial-gradient(circle at 8px 8px, #ece2d4 1.1px, transparent 1.2px),
+        linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+      background-size: 16px 16px, 10px 10px, 10px 10px;
+      display: grid;
+      grid-template-columns: repeat(17, var(--cell));
+      gap: var(--gap);
+      justify-content: center;
+      padding: 10px;
+      min-height: 388px;
+    }
+
+    .drag-layer,
+    .fx-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .drag-layer {
+      overflow: hidden;
+    }
+
+    .marquee {
+      position: absolute;
+      border: 1px dashed #8ea29a;
+      background: #9fb4ad26;
+      box-shadow: inset 0 0 0 1px #ffffff9c;
+      display: none;
+      pointer-events: none;
+      border-radius: 10px;
+    }
+
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+      border: 2px solid #ffffffde;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 30% 20%, #ffffff99 0 18%, transparent 20%),
+        linear-gradient(
+          160deg,
+          hsl(var(--tileHue, 26) 42% 67%),
+          hsl(calc(var(--tileHue, 26) + 6) 44% 57%)
+        );
+      color: var(--num-white);
+      font-family: inherit;
+      font-size: 21px;
+      font-weight: 800;
+      line-height: 1;
+      padding: 0;
+      text-shadow: 0 2px 0 #00000024;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transform: translateZ(0);
+      transition: filter .08s linear, transform .08s linear;
+      box-shadow: 0 2px 0 #00000018;
+      position: relative;
+    }
+
+    .cell::before {
+      content: "";
+      position: absolute;
+      top: -4px;
+      left: 52%;
+      width: 10px;
+      height: 6px;
+      border-radius: 999px;
+      background: #81b66f;
+      transform: rotate(-28deg);
+      opacity: .9;
+    }
+
+    .cell.sel {
+      filter: brightness(1.06);
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: 0 0 0 2px #ecdfc9, 0 3px 6px #00000018;
+    }
+
+    .cell.dead {
+      animation: vanish .14s linear forwards;
+    }
+
+    .empty {
+      width: var(--cell);
+      height: var(--cell);
+      border-radius: 50%;
+      background: transparent;
+    }
+
+    .flash {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #f5f7ef 0 35%, #d7ddcd 70%, transparent 82%);
+      transform: translate(-50%, -50%) scale(.45);
+      animation: flashBurst .16s ease-out forwards;
+      pointer-events: none;
+    }
+
+    .shockwave {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid #b9c8bf;
+      transform: translate(-50%, -50%) scale(.5);
+      animation: shockwave .2s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes flashBurst {
+      to {
+        transform: translate(-50%, -50%) scale(1.7);
+        opacity: 0;
+      }
+    }
+
+    @keyframes shockwave {
+      to {
+        transform: translate(-50%, -50%) scale(2.1);
+        opacity: 0;
+      }
+    }
+
+    @keyframes vanish {
+      to {
+        transform: scale(0.45);
+        opacity: 0;
+      }
+    }
+
+    .cell .num {
+      transform: translateY(0);
+      font-size: 20px;
+      pointer-events: none;
+    }
+
+    .meter {
+      width: 20px;
+      height: 388px;
+      display: grid;
+      grid-template-rows: 24px 1fr;
+      align-items: stretch;
+      justify-items: center;
+      color: #8e6ea6;
+      font-size: 20px;
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .meter .zero {
+      margin-top: 1px;
+    }
+
+    .meter-track {
+      width: 12px;
+      background: #ffffffbd;
+      border: 1px solid #d6b6ff;
+      position: relative;
+      margin-top: 3px;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(to top, #ff7ebe, #ffb17f);
+      height: 100%;
+    }
+
+    .bottom {
+      height: 30px;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      padding: 3px 6px 0;
+      color: #f7ffe0;
+      font-size: 24px;
+    }
+
+    #resetBtn {
+      min-width: 90px;
+      height: 32px;
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(to bottom, #ff9fcb, #ff7faf);
+      color: #fff;
+      font: 800 15px/1 "Trebuchet MS", Arial, sans-serif;
+      padding: 0 14px 1px;
+      cursor: pointer;
+      letter-spacing: .3px;
+      box-shadow: 0 4px 0 #df5d92;
+    }
+
+    #resetBtn:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #df5d92;
+    }
+
+    .hud {
+      position: absolute;
+      left: 16px;
+      top: 14px;
+      font-size: 13px;
+      color: var(--ink-main);
+      display: flex;
+      gap: 8px;
+    }
+
+    .hud span {
+      background: #ffffffa1;
+      border: 1px solid #ffffffdd;
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+
+    .status {
+      position: absolute;
+      right: 18px;
+      top: 15px;
+      color: #705a85;
+      font-size: 12px;
+      max-width: 280px;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background: #ffffff9f;
+      border: 1px solid #ffffffd4;
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+
+    .hint-ok { color: #3c8b63; }
+    .hint-no { color: #ce4f70; }
+
+    @media (max-width: 760px) {
+      .game {
+        width: 100vw;
+        border-radius: 0;
+      }
+      :root {
+        --cell: min(4.8vw, 33px);
+        --gap: min(0.38vw, 3px);
+      }
+      .board {
+        min-height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
+      }
+      .meter {
+        height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <div class="hud">
+      <span>점수 <b id="score">0</b></span>
+      <span>최고점 <b id="best">0</b></span>
+      <span>합계 <b id="sum">0</b></span>
+    </div>
+    <div id="status" class="status">합이 10이 되도록 드래그하세요.</div>
+
+    <div class="play-wrap">
+      <div id="boardStage" class="board-stage">
+        <section id="board" class="board" aria-label="game board"></section>
+        <div id="dragLayer" class="drag-layer" aria-hidden="true">
+          <div id="marquee" class="marquee"></div>
+        </div>
+        <div id="fxLayer" class="fx-layer" aria-hidden="true"></div>
+      </div>
+      <aside class="meter" aria-hidden="true">
+        <div class="zero">0</div>
+        <div class="meter-track"><div id="meterFill" class="meter-fill"></div></div>
+      </aside>
+    </div>
+
+    <footer class="bottom">
+      <button id="resetBtn" type="button">새로 시작</button>
+    </footer>
+  </main>
+
+  <script>
+    const ROWS = 10;
+    const COLS = 17;
+    const MIN = 1;
+    const MAX = 9;
+
+    const boardEl = document.getElementById('board');
+    const boardStageEl = document.getElementById('boardStage');
+    const dragLayerEl = document.getElementById('dragLayer');
+    const fxLayerEl = document.getElementById('fxLayer');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const sumEl = document.getElementById('sum');
+    const statusEl = document.getElementById('status');
+    const meterFillEl = document.getElementById('meterFill');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const marqueeEl = document.getElementById('marquee');
+
+    let grid = [];
+    let score = 0;
+    let best = Number(localStorage.getItem('apple-sum10-best') || 0);
+    let selectedCells = [];
+    let dragStart = null;
+    let dragEnd = null;
+    let dragging = false;
+
+    bestEl.textContent = String(best);
+
+    function randInt(a, b) {
+      return Math.floor(Math.random() * (b - a + 1)) + a;
+    }
+
+    function makeCell() {
+      return { value: randInt(MIN, MAX), selected: false, dead: false };
+    }
+
+    function updateMeter() {
+      const ratio = Math.max(0, Math.min(1, score / 4000));
+      meterFillEl.style.height = `${Math.max(8, ratio * 100)}%`;
+    }
+
+    function initGrid() {
+      grid = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, makeCell));
+      score = 0;
+      selectedCells = [];
+      dragStart = null;
+      dragEnd = null;
+      dragging = false;
+      updateScore(0);
+      render();
+      setStatus('합이 10이 되도록 드래그하세요.', '');
+    }
+
+    function updateScore(delta) {
+      score += delta;
+      if (score > best) {
+        best = score;
+        localStorage.setItem('apple-sum10-best', String(best));
+      }
+      scoreEl.textContent = String(score);
+      bestEl.textContent = String(best);
+      updateMeter();
+    }
+
+    function clearSelections() {
+      for (const [r, c] of selectedCells) {
+        if (grid[r][c]) grid[r][c].selected = false;
+      }
+      selectedCells = [];
+      sumEl.textContent = '0';
+      renderMarquee();
+    }
+
+    function setStatus(text, cls) {
+      statusEl.textContent = text;
+      statusEl.className = `status ${cls}`.trim();
+    }
+
+    function getGridPosFromPoint(clientX, clientY) {
+      const rect = boardEl.getBoundingClientRect();
+      if (
+        clientX < rect.left || clientX > rect.right ||
+        clientY < rect.top || clientY > rect.bottom
+      ) return null;
+
+      const styles = getComputedStyle(boardEl);
+      const cell = parseFloat(styles.getPropertyValue('--cell'));
+      const gap = parseFloat(styles.gap || '0');
+      const padL = parseFloat(styles.paddingLeft || '0');
+      const padT = parseFloat(styles.paddingTop || '0');
+      const step = cell + gap;
+
+      const x = clientX - rect.left - padL;
+      const y = clientY - rect.top - padT;
+      if (x < 0 || y < 0) return null;
+
+      const maxX = (COLS * cell) + ((COLS - 1) * gap);
+      const maxY = (ROWS * cell) + ((ROWS - 1) * gap);
+      if (x > maxX || y > maxY) return null;
+
+      const c = Math.max(0, Math.min(COLS - 1, Math.floor(x / step)));
+      const r = Math.max(0, Math.min(ROWS - 1, Math.floor(y / step)));
+      return [r, c];
+    }
+
+    function getSlotCenterInBoard(r, c) {
+      const el = boardEl.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+      if (!el) return null;
+      const cellRect = el.getBoundingClientRect();
+      const boardRect = boardEl.getBoundingClientRect();
+      return {
+        x: cellRect.left - boardRect.left + (cellRect.width / 2),
+        y: cellRect.top - boardRect.top + (cellRect.height / 2)
+      };
+    }
+
+    function resizeOverlay() {
+      const rect = boardEl.getBoundingClientRect();
+      dragLayerEl.style.width = `${rect.width}px`;
+      dragLayerEl.style.height = `${rect.height}px`;
+      fxLayerEl.style.width = `${rect.width}px`;
+      fxLayerEl.style.height = `${rect.height}px`;
+    }
+
+    function selectedSum() {
+      return selectedCells.reduce((acc, [r, c]) => acc + (grid[r][c]?.value || 0), 0);
+    }
+
+    function updateSelectionByRect() {
+      clearSelections();
+      if (!dragStart || !dragEnd) return;
+
+      const minR = Math.min(dragStart[0], dragEnd[0]);
+      const maxR = Math.max(dragStart[0], dragEnd[0]);
+      const minC = Math.min(dragStart[1], dragEnd[1]);
+      const maxC = Math.max(dragStart[1], dragEnd[1]);
+
+      for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+          if (!grid[r][c]) continue;
+          grid[r][c].selected = true;
+          selectedCells.push([r, c]);
+        }
+      }
+
+      const s = selectedSum();
+      sumEl.textContent = String(s);
+      if (s === 10) setStatus('좋아요! 손을 떼면 사라집니다.', 'hint-ok');
+      else if (s > 10) setStatus('10을 넘었습니다.', 'hint-no');
+      else setStatus('드래그 박스 안 합계를 10으로 맞추세요.', '');
+
+      render();
+      renderMarquee();
+    }
+
+    function renderMarquee() {
+      if (!dragging || !dragStart || !dragEnd) {
+        marqueeEl.style.display = 'none';
+        return;
+      }
+      const p1 = boardEl.querySelector(`[data-r="${dragStart[0]}"][data-c="${dragStart[1]}"]`);
+      const p2 = boardEl.querySelector(`[data-r="${dragEnd[0]}"][data-c="${dragEnd[1]}"]`);
+      if (!p1 || !p2) {
+        marqueeEl.style.display = 'none';
+        return;
+      }
+      const boardRect = boardEl.getBoundingClientRect();
+      const r1 = p1.getBoundingClientRect();
+      const r2 = p2.getBoundingClientRect();
+      const left = Math.min(r1.left, r2.left) - boardRect.left;
+      const top = Math.min(r1.top, r2.top) - boardRect.top;
+      const right = Math.max(r1.right, r2.right) - boardRect.left;
+      const bottom = Math.max(r1.bottom, r2.bottom) - boardRect.top;
+
+      marqueeEl.style.display = 'block';
+      marqueeEl.style.left = `${left}px`;
+      marqueeEl.style.top = `${top}px`;
+      marqueeEl.style.width = `${right - left}px`;
+      marqueeEl.style.height = `${bottom - top}px`;
+    }
+
+    function spawnBombExplosion(r, c) {
+      const center = getSlotCenterInBoard(r, c);
+      if (!center) return;
+
+      const addFx = (className, x, y, ttl) => {
+        const el = document.createElement('div');
+        el.className = className;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        fxLayerEl.appendChild(el);
+        setTimeout(() => el.remove(), ttl);
+        return el;
+      };
+
+      addFx('flash', center.x, center.y, 180);
+      addFx('shockwave', center.x, center.y, 220);
+    }
+
+    function finishDrag() {
+      if (!dragging) return;
+      dragging = false;
+
+      const s = selectedSum();
+      if (s === 10 && selectedCells.length > 0) {
+        for (const [r, c] of selectedCells) spawnBombExplosion(r, c);
+        for (const [r, c] of selectedCells) grid[r][c].dead = true;
+        render();
+        renderMarquee();
+
+        setTimeout(() => {
+          const removed = selectedCells.length;
+          for (const [r, c] of selectedCells) grid[r][c] = null;
+          clearSelections();
+          dragStart = null;
+          dragEnd = null;
+          updateScore(removed * 10);
+          setStatus(`${removed}개 제거`, 'hint-ok');
+          render();
+          renderMarquee();
+        }, 120);
+      } else {
+        clearSelections();
+        dragStart = null;
+        dragEnd = null;
+        if (s === 0) setStatus('합이 10이 되도록 드래그하세요.', '');
+        else setStatus('합계가 10이 아닙니다.', 'hint-no');
+        render();
+      }
+    }
+
+    function render() {
+      boardEl.innerHTML = '';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const it = grid[r][c];
+          if (!it) {
+            const empty = document.createElement('div');
+            empty.className = 'empty slot';
+            empty.dataset.r = String(r);
+            empty.dataset.c = String(c);
+            boardEl.appendChild(empty);
+            continue;
+          }
+          const d = document.createElement('button');
+          d.type = 'button';
+          d.className = `slot cell${it.selected ? ' sel' : ''}${it.dead ? ' dead' : ''}`;
+          d.dataset.r = String(r);
+          d.dataset.c = String(c);
+          d.dataset.value = String(it.value);
+          d.style.setProperty('--tileHue', String(18 + (it.value * 8)));
+          d.setAttribute('aria-label', `${r},${c}:${it.value}`);
+
+          const num = document.createElement('span');
+          num.className = 'num';
+          num.textContent = String(it.value);
+          d.appendChild(num);
+
+          boardEl.appendChild(d);
+        }
+      }
+      resizeOverlay();
+    }
+
+    boardStageEl.addEventListener('pointerdown', (e) => {
+      const pos = getGridPosFromPoint(e.clientX, e.clientY);
+      if (!pos) return;
+      clearSelections();
+      dragging = true;
+      dragStart = pos;
+      dragEnd = pos;
+      updateSelectionByRect();
+      boardStageEl.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+
+    boardStageEl.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const pos = getGridPosFromPoint(e.clientX, e.clientY);
+      if (!pos) return;
+      dragEnd = pos;
+      updateSelectionByRect();
+      e.preventDefault();
+    });
+
+    boardStageEl.addEventListener('pointerup', finishDrag);
+    boardStageEl.addEventListener('pointercancel', finishDrag);
+
+    resetBtn.addEventListener('click', initGrid);
+    window.addEventListener('resize', () => {
+      resizeOverlay();
+      renderMarquee();
+    });
+
+    initGrid();
+  </script>
+</body>
+</html>
