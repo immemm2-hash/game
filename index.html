@@ -369,12 +369,16 @@
     const marqueeEl = document.getElementById('marquee');
 
     let grid = [];
+    let slotEls = [];
     let score = 0;
     let best = Number(localStorage.getItem('apple-sum10-best') || 0);
     let selectedCells = [];
     let dragStart = null;
     let dragEnd = null;
     let dragging = false;
+    let boardMetrics = null;
+    let pendingDragPos = null;
+    let dragRafId = 0;
 
     bestEl.textContent = String(best);
 
@@ -393,6 +397,7 @@
 
     function initGrid() {
       grid = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, makeCell));
+      slotEls = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
       score = 0;
       selectedCells = [];
       dragStart = null;
@@ -417,6 +422,9 @@
     function clearSelections() {
       for (const [r, c] of selectedCells) {
         if (grid[r][c]) grid[r][c].selected = false;
+        if (slotEls[r][c] && slotEls[r][c].classList.contains('cell')) {
+          slotEls[r][c].classList.remove('sel');
+        }
       }
       selectedCells = [];
       sumEl.textContent = '0';
@@ -429,17 +437,16 @@
     }
 
     function getGridPosFromPoint(clientX, clientY) {
-      const rect = boardEl.getBoundingClientRect();
+      const rect = boardMetrics && boardMetrics.rect ? boardMetrics.rect : boardEl.getBoundingClientRect();
       if (
         clientX < rect.left || clientX > rect.right ||
         clientY < rect.top || clientY > rect.bottom
       ) return null;
 
-      const styles = getComputedStyle(boardEl);
-      const cell = parseFloat(styles.getPropertyValue('--cell'));
-      const gap = parseFloat(styles.gap || '0');
-      const padL = parseFloat(styles.paddingLeft || '0');
-      const padT = parseFloat(styles.paddingTop || '0');
+      const cell = boardMetrics ? boardMetrics.cell : parseFloat(getComputedStyle(boardEl).getPropertyValue('--cell'));
+      const gap = boardMetrics ? boardMetrics.gap : parseFloat(getComputedStyle(boardEl).gap || '0');
+      const padL = boardMetrics ? boardMetrics.padL : parseFloat(getComputedStyle(boardEl).paddingLeft || '0');
+      const padT = boardMetrics ? boardMetrics.padT : parseFloat(getComputedStyle(boardEl).paddingTop || '0');
       const step = cell + gap;
 
       const x = clientX - rect.left - padL;
@@ -456,18 +463,22 @@
     }
 
     function getSlotCenterInBoard(r, c) {
-      const el = boardEl.querySelector(`[data-r="${r}"][data-c="${c}"]`);
-      if (!el) return null;
-      const cellRect = el.getBoundingClientRect();
-      const boardRect = boardEl.getBoundingClientRect();
+      if (!boardMetrics) return null;
       return {
-        x: cellRect.left - boardRect.left + (cellRect.width / 2),
-        y: cellRect.top - boardRect.top + (cellRect.height / 2)
+        x: boardMetrics.padL + (c * boardMetrics.step) + (boardMetrics.cell / 2),
+        y: boardMetrics.padT + (r * boardMetrics.step) + (boardMetrics.cell / 2)
       };
     }
 
     function resizeOverlay() {
       const rect = boardEl.getBoundingClientRect();
+      const styles = getComputedStyle(boardEl);
+      const cell = parseFloat(styles.getPropertyValue('--cell'));
+      const gap = parseFloat(styles.gap || '0');
+      const padL = parseFloat(styles.paddingLeft || '0');
+      const padT = parseFloat(styles.paddingTop || '0');
+      boardMetrics = { rect, cell, gap, padL, padT, step: cell + gap };
+
       dragLayerEl.style.width = `${rect.width}px`;
       dragLayerEl.style.height = `${rect.height}px`;
       fxLayerEl.style.width = `${rect.width}px`;
@@ -479,29 +490,52 @@
     }
 
     function updateSelectionByRect() {
-      clearSelections();
       if (!dragStart || !dragEnd) return;
 
       const minR = Math.min(dragStart[0], dragEnd[0]);
       const maxR = Math.max(dragStart[0], dragEnd[0]);
       const minC = Math.min(dragStart[1], dragEnd[1]);
       const maxC = Math.max(dragStart[1], dragEnd[1]);
+      const prevKeys = new Set(selectedCells.map(([r, c]) => `${r},${c}`));
+      const next = [];
+      const nextKeys = new Set();
+      let s = 0;
 
       for (let r = minR; r <= maxR; r++) {
         for (let c = minC; c <= maxC; c++) {
           if (!grid[r][c]) continue;
-          grid[r][c].selected = true;
-          selectedCells.push([r, c]);
+          next.push([r, c]);
+          nextKeys.add(`${r},${c}`);
+          s += grid[r][c].value;
         }
       }
 
-      const s = selectedSum();
+      for (const [r, c] of selectedCells) {
+        const key = `${r},${c}`;
+        if (!nextKeys.has(key)) {
+          grid[r][c].selected = false;
+          if (slotEls[r][c] && slotEls[r][c].classList.contains('cell')) {
+            slotEls[r][c].classList.remove('sel');
+          }
+        }
+      }
+
+      for (const [r, c] of next) {
+        const key = `${r},${c}`;
+        if (!prevKeys.has(key)) {
+          grid[r][c].selected = true;
+          if (slotEls[r][c] && slotEls[r][c].classList.contains('cell')) {
+            slotEls[r][c].classList.add('sel');
+          }
+        }
+      }
+
+      selectedCells = next;
       sumEl.textContent = String(s);
       if (s === 10) setStatus('좋아요! 손을 떼면 사라집니다.', 'hint-ok');
       else if (s > 10) setStatus('10을 넘었습니다.', 'hint-no');
       else setStatus('드래그 박스 안 합계를 10으로 맞추세요.', '');
 
-      render();
       renderMarquee();
     }
 
@@ -510,25 +544,24 @@
         marqueeEl.style.display = 'none';
         return;
       }
-      const p1 = boardEl.querySelector(`[data-r="${dragStart[0]}"][data-c="${dragStart[1]}"]`);
-      const p2 = boardEl.querySelector(`[data-r="${dragEnd[0]}"][data-c="${dragEnd[1]}"]`);
-      if (!p1 || !p2) {
+      if (!boardMetrics) {
         marqueeEl.style.display = 'none';
         return;
       }
-      const boardRect = boardEl.getBoundingClientRect();
-      const r1 = p1.getBoundingClientRect();
-      const r2 = p2.getBoundingClientRect();
-      const left = Math.min(r1.left, r2.left) - boardRect.left;
-      const top = Math.min(r1.top, r2.top) - boardRect.top;
-      const right = Math.max(r1.right, r2.right) - boardRect.left;
-      const bottom = Math.max(r1.bottom, r2.bottom) - boardRect.top;
+      const minR = Math.min(dragStart[0], dragEnd[0]);
+      const maxR = Math.max(dragStart[0], dragEnd[0]);
+      const minC = Math.min(dragStart[1], dragEnd[1]);
+      const maxC = Math.max(dragStart[1], dragEnd[1]);
+      const left = boardMetrics.padL + (minC * boardMetrics.step);
+      const top = boardMetrics.padT + (minR * boardMetrics.step);
+      const width = ((maxC - minC + 1) * boardMetrics.cell) + ((maxC - minC) * boardMetrics.gap);
+      const height = ((maxR - minR + 1) * boardMetrics.cell) + ((maxR - minR) * boardMetrics.gap);
 
       marqueeEl.style.display = 'block';
       marqueeEl.style.left = `${left}px`;
       marqueeEl.style.top = `${top}px`;
-      marqueeEl.style.width = `${right - left}px`;
-      marqueeEl.style.height = `${bottom - top}px`;
+      marqueeEl.style.width = `${width}px`;
+      marqueeEl.style.height = `${height}px`;
     }
 
     function spawnBombExplosion(r, c) {
@@ -552,6 +585,15 @@
     function finishDrag() {
       if (!dragging) return;
       dragging = false;
+      if (dragRafId) {
+        cancelAnimationFrame(dragRafId);
+        dragRafId = 0;
+      }
+      if (pendingDragPos) {
+        dragEnd = pendingDragPos;
+        pendingDragPos = null;
+        updateSelectionByRect();
+      }
 
       const s = selectedSum();
       if (s === 10 && selectedCells.length > 0) {
@@ -592,6 +634,7 @@
             empty.dataset.r = String(r);
             empty.dataset.c = String(c);
             boardEl.appendChild(empty);
+            slotEls[r][c] = empty;
             continue;
           }
           const d = document.createElement('button');
@@ -609,9 +652,22 @@
           d.appendChild(num);
 
           boardEl.appendChild(d);
+          slotEls[r][c] = d;
         }
       }
       resizeOverlay();
+    }
+
+    function scheduleDragUpdate(pos) {
+      pendingDragPos = pos;
+      if (dragRafId) return;
+      dragRafId = requestAnimationFrame(() => {
+        dragRafId = 0;
+        if (!pendingDragPos) return;
+        dragEnd = pendingDragPos;
+        pendingDragPos = null;
+        updateSelectionByRect();
+      });
     }
 
     boardStageEl.addEventListener('pointerdown', (e) => {
@@ -630,8 +686,7 @@
       if (!dragging) return;
       const pos = getGridPosFromPoint(e.clientX, e.clientY);
       if (!pos) return;
-      dragEnd = pos;
-      updateSelectionByRect();
+      scheduleDragUpdate(pos);
       e.preventDefault();
     });
 
