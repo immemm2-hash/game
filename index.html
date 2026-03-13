@@ -1,5 +1,6 @@
 ﻿<!doctype html>
 <html lang="ko">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -101,11 +102,9 @@
       border-radius: 50%;
       background:
         radial-gradient(circle at 30% 20%, #ffffff99 0 18%, transparent 20%),
-        linear-gradient(
-          160deg,
+        linear-gradient(160deg,
           hsl(var(--tileHue, 26) 42% 67%),
-          hsl(calc(var(--tileHue, 26) + 6) 44% 57%)
-        );
+          hsl(calc(var(--tileHue, 26) + 6) 44% 57%));
       color: var(--num-white);
       font-family: inherit;
       font-size: 21px;
@@ -142,7 +141,7 @@
     }
 
     .cell.dead {
-      animation: vanish .14s linear forwards;
+      animation: vanish .18s cubic-bezier(.2,.7,.2,1) forwards;
     }
 
     .empty {
@@ -174,6 +173,18 @@
       pointer-events: none;
     }
 
+    .spark {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #d9e1d8;
+      box-shadow: 0 0 3px #d2dbd1;
+      transform: translate(-50%, -50%);
+      animation: sparkFly .22s ease-out forwards;
+      pointer-events: none;
+    }
+
     @keyframes flashBurst {
       to {
         transform: translate(-50%, -50%) scale(1.7);
@@ -189,8 +200,23 @@
     }
 
     @keyframes vanish {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      35% {
+        transform: scale(1.08);
+        opacity: 1;
+      }
       to {
         transform: scale(0.45);
+        opacity: 0;
+      }
+    }
+
+    @keyframes sparkFly {
+      to {
+        transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)));
         opacity: 0;
       }
     }
@@ -300,27 +326,36 @@
       padding: 4px 10px;
     }
 
-    .hint-ok { color: #3c8b63; }
-    .hint-no { color: #ce4f70; }
+    .hint-ok {
+      color: #3c8b63;
+    }
+
+    .hint-no {
+      color: #ce4f70;
+    }
 
     @media (max-width: 760px) {
       .game {
         width: 100vw;
         border-radius: 0;
       }
+
       :root {
         --cell: min(4.8vw, 33px);
         --gap: min(0.38vw, 3px);
       }
+
       .board {
         min-height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
       }
+
       .meter {
         height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
       }
     }
   </style>
 </head>
+
 <body>
   <main class="game">
     <div class="hud">
@@ -340,7 +375,9 @@
       </div>
       <aside class="meter" aria-hidden="true">
         <div class="zero">0</div>
-        <div class="meter-track"><div id="meterFill" class="meter-fill"></div></div>
+        <div class="meter-track">
+          <div id="meterFill" class="meter-fill"></div>
+        </div>
       </aside>
     </div>
 
@@ -369,16 +406,12 @@
     const marqueeEl = document.getElementById('marquee');
 
     let grid = [];
-    let slotEls = [];
     let score = 0;
     let best = Number(localStorage.getItem('apple-sum10-best') || 0);
     let selectedCells = [];
     let dragStart = null;
     let dragEnd = null;
     let dragging = false;
-    let boardMetrics = null;
-    let pendingDragPos = null;
-    let dragRafId = 0;
 
     bestEl.textContent = String(best);
 
@@ -397,7 +430,6 @@
 
     function initGrid() {
       grid = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, makeCell));
-      slotEls = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
       score = 0;
       selectedCells = [];
       dragStart = null;
@@ -422,9 +454,6 @@
     function clearSelections() {
       for (const [r, c] of selectedCells) {
         if (grid[r][c]) grid[r][c].selected = false;
-        if (slotEls[r][c] && slotEls[r][c].classList.contains('cell')) {
-          slotEls[r][c].classList.remove('sel');
-        }
       }
       selectedCells = [];
       sumEl.textContent = '0';
@@ -437,16 +466,17 @@
     }
 
     function getGridPosFromPoint(clientX, clientY) {
-      const rect = boardMetrics && boardMetrics.rect ? boardMetrics.rect : boardEl.getBoundingClientRect();
+      const rect = boardEl.getBoundingClientRect();
       if (
         clientX < rect.left || clientX > rect.right ||
         clientY < rect.top || clientY > rect.bottom
       ) return null;
 
-      const cell = boardMetrics ? boardMetrics.cell : parseFloat(getComputedStyle(boardEl).getPropertyValue('--cell'));
-      const gap = boardMetrics ? boardMetrics.gap : parseFloat(getComputedStyle(boardEl).gap || '0');
-      const padL = boardMetrics ? boardMetrics.padL : parseFloat(getComputedStyle(boardEl).paddingLeft || '0');
-      const padT = boardMetrics ? boardMetrics.padT : parseFloat(getComputedStyle(boardEl).paddingTop || '0');
+      const styles = getComputedStyle(boardEl);
+      const cell = parseFloat(styles.getPropertyValue('--cell'));
+      const gap = parseFloat(styles.gap || '0');
+      const padL = parseFloat(styles.paddingLeft || '0');
+      const padT = parseFloat(styles.paddingTop || '0');
       const step = cell + gap;
 
       const x = clientX - rect.left - padL;
@@ -463,22 +493,18 @@
     }
 
     function getSlotCenterInBoard(r, c) {
-      if (!boardMetrics) return null;
+      const el = boardEl.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+      if (!el) return null;
+      const cellRect = el.getBoundingClientRect();
+      const boardRect = boardEl.getBoundingClientRect();
       return {
-        x: boardMetrics.padL + (c * boardMetrics.step) + (boardMetrics.cell / 2),
-        y: boardMetrics.padT + (r * boardMetrics.step) + (boardMetrics.cell / 2)
+        x: cellRect.left - boardRect.left + (cellRect.width / 2),
+        y: cellRect.top - boardRect.top + (cellRect.height / 2)
       };
     }
 
     function resizeOverlay() {
       const rect = boardEl.getBoundingClientRect();
-      const styles = getComputedStyle(boardEl);
-      const cell = parseFloat(styles.getPropertyValue('--cell'));
-      const gap = parseFloat(styles.gap || '0');
-      const padL = parseFloat(styles.paddingLeft || '0');
-      const padT = parseFloat(styles.paddingTop || '0');
-      boardMetrics = { rect, cell, gap, padL, padT, step: cell + gap };
-
       dragLayerEl.style.width = `${rect.width}px`;
       dragLayerEl.style.height = `${rect.height}px`;
       fxLayerEl.style.width = `${rect.width}px`;
@@ -490,52 +516,29 @@
     }
 
     function updateSelectionByRect() {
+      clearSelections();
       if (!dragStart || !dragEnd) return;
 
       const minR = Math.min(dragStart[0], dragEnd[0]);
       const maxR = Math.max(dragStart[0], dragEnd[0]);
       const minC = Math.min(dragStart[1], dragEnd[1]);
       const maxC = Math.max(dragStart[1], dragEnd[1]);
-      const prevKeys = new Set(selectedCells.map(([r, c]) => `${r},${c}`));
-      const next = [];
-      const nextKeys = new Set();
-      let s = 0;
 
       for (let r = minR; r <= maxR; r++) {
         for (let c = minC; c <= maxC; c++) {
           if (!grid[r][c]) continue;
-          next.push([r, c]);
-          nextKeys.add(`${r},${c}`);
-          s += grid[r][c].value;
-        }
-      }
-
-      for (const [r, c] of selectedCells) {
-        const key = `${r},${c}`;
-        if (!nextKeys.has(key)) {
-          grid[r][c].selected = false;
-          if (slotEls[r][c] && slotEls[r][c].classList.contains('cell')) {
-            slotEls[r][c].classList.remove('sel');
-          }
-        }
-      }
-
-      for (const [r, c] of next) {
-        const key = `${r},${c}`;
-        if (!prevKeys.has(key)) {
           grid[r][c].selected = true;
-          if (slotEls[r][c] && slotEls[r][c].classList.contains('cell')) {
-            slotEls[r][c].classList.add('sel');
-          }
+          selectedCells.push([r, c]);
         }
       }
 
-      selectedCells = next;
+      const s = selectedSum();
       sumEl.textContent = String(s);
       if (s === 10) setStatus('좋아요! 손을 떼면 사라집니다.', 'hint-ok');
       else if (s > 10) setStatus('10을 넘었습니다.', 'hint-no');
       else setStatus('드래그 박스 안 합계를 10으로 맞추세요.', '');
 
+      render();
       renderMarquee();
     }
 
@@ -544,24 +547,25 @@
         marqueeEl.style.display = 'none';
         return;
       }
-      if (!boardMetrics) {
+      const p1 = boardEl.querySelector(`[data-r="${dragStart[0]}"][data-c="${dragStart[1]}"]`);
+      const p2 = boardEl.querySelector(`[data-r="${dragEnd[0]}"][data-c="${dragEnd[1]}"]`);
+      if (!p1 || !p2) {
         marqueeEl.style.display = 'none';
         return;
       }
-      const minR = Math.min(dragStart[0], dragEnd[0]);
-      const maxR = Math.max(dragStart[0], dragEnd[0]);
-      const minC = Math.min(dragStart[1], dragEnd[1]);
-      const maxC = Math.max(dragStart[1], dragEnd[1]);
-      const left = boardMetrics.padL + (minC * boardMetrics.step);
-      const top = boardMetrics.padT + (minR * boardMetrics.step);
-      const width = ((maxC - minC + 1) * boardMetrics.cell) + ((maxC - minC) * boardMetrics.gap);
-      const height = ((maxR - minR + 1) * boardMetrics.cell) + ((maxR - minR) * boardMetrics.gap);
+      const boardRect = boardEl.getBoundingClientRect();
+      const r1 = p1.getBoundingClientRect();
+      const r2 = p2.getBoundingClientRect();
+      const left = Math.min(r1.left, r2.left) - boardRect.left;
+      const top = Math.min(r1.top, r2.top) - boardRect.top;
+      const right = Math.max(r1.right, r2.right) - boardRect.left;
+      const bottom = Math.max(r1.bottom, r2.bottom) - boardRect.top;
 
       marqueeEl.style.display = 'block';
       marqueeEl.style.left = `${left}px`;
       marqueeEl.style.top = `${top}px`;
-      marqueeEl.style.width = `${width}px`;
-      marqueeEl.style.height = `${height}px`;
+      marqueeEl.style.width = `${right - left}px`;
+      marqueeEl.style.height = `${bottom - top}px`;
     }
 
     function spawnBombExplosion(r, c) {
@@ -580,20 +584,18 @@
 
       addFx('flash', center.x, center.y, 180);
       addFx('shockwave', center.x, center.y, 220);
+      for (let i = 0; i < 3; i++) {
+        const angle = (-Math.PI / 2) + ((Math.random() - 0.5) * 1.2) + (i * 0.3);
+        const dist = 8 + Math.random() * 8;
+        const spark = addFx('spark', center.x, center.y, 220);
+        spark.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+        spark.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+      }
     }
 
     function finishDrag() {
       if (!dragging) return;
       dragging = false;
-      if (dragRafId) {
-        cancelAnimationFrame(dragRafId);
-        dragRafId = 0;
-      }
-      if (pendingDragPos) {
-        dragEnd = pendingDragPos;
-        pendingDragPos = null;
-        updateSelectionByRect();
-      }
 
       const s = selectedSum();
       if (s === 10 && selectedCells.length > 0) {
@@ -634,7 +636,6 @@
             empty.dataset.r = String(r);
             empty.dataset.c = String(c);
             boardEl.appendChild(empty);
-            slotEls[r][c] = empty;
             continue;
           }
           const d = document.createElement('button');
@@ -652,22 +653,9 @@
           d.appendChild(num);
 
           boardEl.appendChild(d);
-          slotEls[r][c] = d;
         }
       }
       resizeOverlay();
-    }
-
-    function scheduleDragUpdate(pos) {
-      pendingDragPos = pos;
-      if (dragRafId) return;
-      dragRafId = requestAnimationFrame(() => {
-        dragRafId = 0;
-        if (!pendingDragPos) return;
-        dragEnd = pendingDragPos;
-        pendingDragPos = null;
-        updateSelectionByRect();
-      });
     }
 
     boardStageEl.addEventListener('pointerdown', (e) => {
@@ -686,7 +674,8 @@
       if (!dragging) return;
       const pos = getGridPosFromPoint(e.clientX, e.clientY);
       if (!pos) return;
-      scheduleDragUpdate(pos);
+      dragEnd = pos;
+      updateSelectionByRect();
       e.preventDefault();
     });
 
@@ -702,4 +691,5 @@
     initGrid();
   </script>
 </body>
+
 </html>
