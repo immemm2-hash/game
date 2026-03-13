@@ -57,6 +57,34 @@
       height: fit-content;
     }
 
+    .game-over {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: #00000040;
+      border-radius: 18px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .game-over.show {
+      display: flex;
+    }
+
+    .game-over-card {
+      background: #ffffffde;
+      border: 1px solid #ffffff;
+      border-radius: 14px;
+      padding: 12px 16px;
+      color: #4f5e5a;
+      font-weight: 800;
+      box-shadow: 0 8px 16px #00000022;
+      text-align: center;
+      line-height: 1.3;
+    }
+
 
     .board {
       border-radius: 18px;
@@ -85,6 +113,11 @@
 
     .drag-layer {
       overflow: hidden;
+    }
+
+    .fx-layer {
+      z-index: 2;
+      overflow: visible;
     }
 
     .marquee {
@@ -155,60 +188,110 @@
 
     .flash {
       position: absolute;
-      width: 10px;
-      height: 10px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
-      background: radial-gradient(circle, #f5f7ef 0 35%, #d7ddcd 70%, transparent 82%);
+      background: radial-gradient(circle, #ffffff 0 30%, #fff2b8 52%, #ffd890 72%, transparent 84%);
       transform: translate(-50%, -50%) scale(.45);
-      animation: flashBurst .2s ease-out forwards;
+      animation: flashBurst .28s ease-out forwards;
+      box-shadow: 0 0 16px #ffe6a8;
       pointer-events: none;
     }
 
     .shockwave {
       position: absolute;
-      width: 14px;
-      height: 14px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
-      border: 1px solid #b9c8bf;
+      border: 2px solid #ffd89a;
       transform: translate(-50%, -50%) scale(.5);
-      animation: shockwave .28s ease-out forwards;
+      animation: shockwave .36s ease-out forwards;
+      box-shadow: 0 0 10px #ffdba4;
       pointer-events: none;
     }
 
     .impact-core {
       position: absolute;
-      width: 8px;
-      height: 8px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
-      background: radial-gradient(circle, #f8fbf4 0 35%, #dce7d8 72%, transparent 85%);
+      background: radial-gradient(circle, #fff9da 0 30%, #ffd07c 58%, #ff9f57 82%, transparent 88%);
       transform: translate(-50%, -50%) scale(.4);
-      animation: corePop .18s ease-out forwards;
+      animation: corePop .24s ease-out forwards;
       pointer-events: none;
+    }
+
+    .blast-star {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      background: radial-gradient(circle, #fff7ca 0 38%, #ffc85e 68%, transparent 78%);
+      clip-path: polygon(50% 0%, 62% 34%, 100% 50%, 62% 66%, 50% 100%, 38% 66%, 0% 50%, 38% 34%);
+      transform: translate(-50%, -50%) scale(.35) rotate(0deg);
+      animation: starBurst .32s ease-out forwards;
+      filter: drop-shadow(0 0 10px #ffd78f);
+      pointer-events: none;
+    }
+
+    .burst-glow {
+      position: absolute;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #fffef2 0 30%, #ffd777 52%, #ff9d57 74%, transparent 84%);
+      transform: translate(-50%, -50%) scale(.3);
+      animation: burstGlow .36s ease-out forwards;
+      filter: drop-shadow(0 0 18px #ffd88e);
+      pointer-events: none;
+    }
+
+    .shockwave-strong {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 3px solid #ffe7b3;
+      transform: translate(-50%, -50%) scale(.45);
+      animation: strongWave .3s ease-out forwards;
+      box-shadow: 0 0 14px #ffd084;
+      pointer-events: none;
+    }
+
+    .impact-text {
+      position: absolute;
+      transform: translate(-50%, -50%) scale(.4);
+      font: 900 18px/1 "Trebuchet MS", Arial, sans-serif;
+      color: #fff8d8;
+      text-shadow: 0 0 8px #ffbe5f, 0 2px 0 #b85f2a;
+      letter-spacing: .4px;
+      animation: impactText .36s ease-out forwards;
+      pointer-events: none;
+      white-space: nowrap;
     }
 
     .spark {
       position: absolute;
-      width: 4px;
-      height: 4px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: #d9e1d8;
-      box-shadow: 0 0 3px #d2dbd1;
+      background: radial-gradient(circle, #fff6cb 0 35%, #ffd087 70%, #ffb86e 100%);
+      box-shadow: 0 0 8px #ffd59a;
       transform: translate(-50%, -50%);
-      animation: sparkFly .3s ease-out forwards;
+      animation: sparkFly .4s ease-out forwards;
       pointer-events: none;
-      opacity: .9;
+      opacity: 1;
     }
 
     @keyframes flashBurst {
       to {
-        transform: translate(-50%, -50%) scale(1.7);
+        transform: translate(-50%, -50%) scale(2.8);
         opacity: 0;
       }
     }
 
     @keyframes shockwave {
       to {
-        transform: translate(-50%, -50%) scale(2.1);
+        transform: translate(-50%, -50%) scale(3.6);
         opacity: 0;
       }
     }
@@ -234,7 +317,43 @@
 
     @keyframes corePop {
       to {
-        transform: translate(-50%, -50%) scale(1.9);
+        transform: translate(-50%, -50%) scale(2.9);
+        opacity: 0;
+      }
+    }
+
+    @keyframes starBurst {
+      to {
+        transform: translate(-50%, -50%) scale(2.4) rotate(22deg);
+        opacity: 0;
+      }
+    }
+
+    @keyframes strongWave {
+      to {
+        transform: translate(-50%, -50%) scale(3.1);
+        opacity: 0;
+      }
+    }
+
+    @keyframes burstGlow {
+      to {
+        transform: translate(-50%, -50%) scale(2.9);
+        opacity: 0;
+      }
+    }
+
+    @keyframes impactText {
+      0% {
+        transform: translate(-50%, -50%) scale(.4);
+        opacity: 0;
+      }
+      25% {
+        transform: translate(-50%, calc(-50% - 6px)) scale(1.18);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, calc(-50% - 18px)) scale(.96);
         opacity: 0;
       }
     }
@@ -397,9 +516,12 @@
           <div id="marquee" class="marquee"></div>
         </div>
         <div id="fxLayer" class="fx-layer" aria-hidden="true"></div>
+        <div id="gameOverEl" class="game-over" aria-hidden="true">
+          <div class="game-over-card">시간 종료!<br>새로 시작을 눌러 다시 도전하세요.</div>
+        </div>
       </div>
       <aside class="meter" aria-hidden="true">
-        <div class="zero">0</div>
+        <div id="timerText" class="zero">60</div>
         <div class="meter-track">
           <div id="meterFill" class="meter-fill"></div>
         </div>
@@ -416,6 +538,7 @@
     const COLS = 17;
     const MIN = 1;
     const MAX = 9;
+    const TIME_LIMIT_MS = 60000;
 
     const boardEl = document.getElementById('board');
     const boardStageEl = document.getElementById('boardStage');
@@ -426,6 +549,8 @@
     const sumEl = document.getElementById('sum');
     const statusEl = document.getElementById('status');
     const meterFillEl = document.getElementById('meterFill');
+    const timerTextEl = document.getElementById('timerText');
+    const gameOverEl = document.getElementById('gameOverEl');
     const resetBtn = document.getElementById('resetBtn');
 
     const marqueeEl = document.getElementById('marquee');
@@ -442,6 +567,10 @@
     let pendingDragPos = null;
     let dragRafId = 0;
     let audioCtx = null;
+    let timeLeftMs = TIME_LIMIT_MS;
+    let timerRafId = 0;
+    let timerLastTs = 0;
+    let isGameOver = false;
 
     bestEl.textContent = String(best);
 
@@ -454,8 +583,49 @@
     }
 
     function updateMeter() {
-      const ratio = Math.max(0, Math.min(1, score / 4000));
-      meterFillEl.style.height = `${Math.max(8, ratio * 100)}%`;
+      const ratio = Math.max(0, Math.min(1, timeLeftMs / TIME_LIMIT_MS));
+      meterFillEl.style.height = `${ratio * 100}%`;
+      timerTextEl.textContent = String(Math.ceil(timeLeftMs / 1000));
+    }
+
+    function stopTimer() {
+      if (!timerRafId) return;
+      cancelAnimationFrame(timerRafId);
+      timerRafId = 0;
+      timerLastTs = 0;
+    }
+
+    function onTimeOver() {
+      isGameOver = true;
+      dragging = false;
+      pendingDragPos = null;
+      if (dragRafId) {
+        cancelAnimationFrame(dragRafId);
+        dragRafId = 0;
+      }
+      clearSelections();
+      setStatus('시간 종료! 새로 시작을 눌러 다시 도전하세요.', 'hint-no');
+      gameOverEl.classList.add('show');
+      stopTimer();
+    }
+
+    function tickTimer(ts) {
+      if (isGameOver) return;
+      if (!timerLastTs) timerLastTs = ts;
+      const dt = ts - timerLastTs;
+      timerLastTs = ts;
+      timeLeftMs = Math.max(0, timeLeftMs - dt);
+      updateMeter();
+      if (timeLeftMs <= 0) {
+        onTimeOver();
+        return;
+      }
+      timerRafId = requestAnimationFrame(tickTimer);
+    }
+
+    function startTimer() {
+      stopTimer();
+      timerRafId = requestAnimationFrame(tickTimer);
     }
 
     function initGrid() {
@@ -466,8 +636,13 @@
       dragStart = null;
       dragEnd = null;
       dragging = false;
+      isGameOver = false;
+      timeLeftMs = TIME_LIMIT_MS;
+      gameOverEl.classList.remove('show');
       updateScore(0);
+      updateMeter();
       render();
+      startTimer();
       setStatus('합이 10이 되도록 드래그하세요.', '');
     }
 
@@ -479,7 +654,6 @@
       }
       scoreEl.textContent = String(score);
       bestEl.textContent = String(best);
-      updateMeter();
     }
 
     function clearSelections() {
@@ -527,7 +701,15 @@
     }
 
     function getSlotCenterInBoard(r, c) {
-      if (!boardMetrics) return null;
+      if (!boardMetrics) {
+        const rect = boardEl.getBoundingClientRect();
+        const styles = getComputedStyle(boardEl);
+        const cell = parseFloat(styles.getPropertyValue('--cell'));
+        const gap = parseFloat(styles.gap || '0');
+        const padL = parseFloat(styles.paddingLeft || '0');
+        const padT = parseFloat(styles.paddingTop || '0');
+        boardMetrics = { rect, cell, gap, padL, padT, step: cell + gap };
+      }
       return {
         x: boardMetrics.padL + (c * boardMetrics.step) + (boardMetrics.cell / 2),
         y: boardMetrics.padT + (r * boardMetrics.step) + (boardMetrics.cell / 2)
@@ -627,8 +809,10 @@
     }
 
     function spawnBombExplosion(r, c) {
-      const center = getSlotCenterInBoard(r, c);
-      if (!center) return;
+      const center = getSlotCenterInBoard(r, c) || {
+        x: (boardMetrics?.rect?.width || boardEl.clientWidth) / 2,
+        y: (boardMetrics?.rect?.height || boardEl.clientHeight) / 2
+      };
 
       const addFx = (className, x, y, ttl) => {
         const el = document.createElement('div');
@@ -640,14 +824,28 @@
         return el;
       };
 
+      const addTextFx = (x, y, ttl) => {
+        const el = document.createElement('div');
+        el.className = 'impact-text';
+        el.textContent = '팡!';
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        fxLayerEl.appendChild(el);
+        setTimeout(() => el.remove(), ttl);
+      };
+
+      addFx('burst-glow', center.x, center.y, 360);
       addFx('impact-core', center.x, center.y, 160);
-      addFx('flash', center.x, center.y, 240);
-      addFx('shockwave', center.x, center.y, 300);
-      setTimeout(() => addFx('shockwave', center.x, center.y, 240), 70);
-      for (let i = 0; i < 6; i++) {
+      addFx('blast-star', center.x, center.y, 320);
+      addFx('shockwave-strong', center.x, center.y, 320);
+      addFx('flash', center.x, center.y, 260);
+      addFx('shockwave', center.x, center.y, 320);
+      setTimeout(() => addFx('shockwave', center.x, center.y, 260), 75);
+      addTextFx(center.x, center.y, 360);
+      for (let i = 0; i < 12; i++) {
         const angle = (-Math.PI / 2) + ((Math.random() - 0.5) * 0.9) + (i * 0.22);
-        const dist = 6 + Math.random() * 6;
-        const spark = addFx('spark', center.x, center.y, 300);
+        const dist = 14 + Math.random() * 14;
+        const spark = addFx('spark', center.x, center.y, 420);
         spark.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
         spark.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
       }
@@ -696,6 +894,7 @@
     }
 
     function finishDrag() {
+      if (isGameOver) return;
       if (!dragging) return;
       dragging = false;
       if (dragRafId) {
@@ -710,6 +909,7 @@
 
       const s = selectedSum();
       if (s === 10 && selectedCells.length > 0) {
+        resizeOverlay();
         triggerHitFeedback(selectedCells.length);
         for (const [r, c] of selectedCells) spawnBombExplosion(r, c);
         for (const [r, c] of selectedCells) grid[r][c].dead = true;
@@ -789,6 +989,7 @@
     }
 
     boardStageEl.addEventListener('pointerdown', (e) => {
+      if (isGameOver) return;
       const pos = getGridPosFromPoint(e.clientX, e.clientY);
       if (!pos) return;
       clearSelections();
@@ -801,6 +1002,7 @@
     });
 
     boardStageEl.addEventListener('pointermove', (e) => {
+      if (isGameOver) return;
       if (!dragging) return;
       const pos = getGridPosFromPoint(e.clientX, e.clientY);
       if (!pos) return;
