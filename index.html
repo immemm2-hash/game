@@ -125,11 +125,10 @@
     .path-line {
       fill: none;
       stroke: #6c8f86;
-      stroke-width: 7;
+      stroke-width: 6;
       stroke-linecap: round;
       stroke-linejoin: round;
-      opacity: .85;
-      filter: drop-shadow(0 1px 1px #ffffffbf);
+      opacity: .8;
     }
 
     .path-dot {
@@ -578,6 +577,7 @@
     let score = 0;
     let best = Number(localStorage.getItem('apple-sum10-best') || 0);
     let selectedCells = [];
+    let selectedCellSet = new Set();
     let selectedSumValue = 0;
     let dragging = false;
     let boardMetrics = null;
@@ -590,6 +590,8 @@
     let timerLastTs = 0;
     let isGameOver = false;
     let pathLineEl = null;
+    let lastStatusText = '';
+    let lastStatusCls = '';
 
     bestEl.textContent = String(best);
 
@@ -652,6 +654,7 @@
       slotEls = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
       score = 0;
       selectedCells = [];
+      selectedCellSet = new Set();
       selectedSumValue = 0;
       dragging = false;
       isGameOver = false;
@@ -683,12 +686,16 @@
         }
       }
       selectedCells = [];
+      selectedCellSet = new Set();
       selectedSumValue = 0;
-      sumEl.textContent = '0';
+      if (sumEl.textContent !== '0') sumEl.textContent = '0';
       renderPathOverlay();
     }
 
     function setStatus(text, cls) {
+      if (text === lastStatusText && cls === lastStatusCls) return;
+      lastStatusText = text;
+      lastStatusCls = cls;
       statusEl.textContent = text;
       statusEl.className = `status ${cls}`.trim();
     }
@@ -752,75 +759,87 @@
       return selectedCells.filter(([r, c]) => !!grid[r][c]);
     }
 
+    function cellKey(r, c) {
+      return `${r},${c}`;
+    }
+
     function isAdjacent(a, b) {
       return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
     }
 
     function updateSelectionStatus() {
-      sumEl.textContent = String(selectedSumValue);
+      const nextSumText = String(selectedSumValue);
+      if (sumEl.textContent !== nextSumText) sumEl.textContent = nextSumText;
       if (selectedSumValue === 10) setStatus('좋아요! 손을 떼면 사라집니다.', 'hint-ok');
       else if (selectedSumValue > 10) setStatus('10을 넘었습니다.', 'hint-no');
       else setStatus('선을 이어 합계를 10으로 맞추세요.', '');
     }
 
-    function addPathCell(pos) {
+    function flushSelectionVisuals() {
+      updateSelectionStatus();
+      renderPathOverlay();
+    }
+
+    function addPathCell(pos, deferVisual = false) {
       if (!pos) return;
       const [r, c] = pos;
       if (selectedCells.length === 0) {
         selectedCells.push([r, c]);
+        selectedCellSet.add(cellKey(r, c));
         if (grid[r][c]) {
           grid[r][c].selected = true;
           selectedSumValue += grid[r][c].value;
           const firstEl = slotEls[r][c];
           if (firstEl && firstEl.classList && firstEl.classList.contains('cell')) firstEl.classList.add('sel');
         }
-        updateSelectionStatus();
-        renderPathOverlay();
-        return;
+        if (!deferVisual) flushSelectionVisuals();
+        return true;
       }
 
       const [lr, lc] = selectedCells[selectedCells.length - 1];
-      if (lr === r && lc === c) return;
-      if (!isAdjacent([lr, lc], [r, c])) return;
+      if (lr === r && lc === c) return false;
+      if (!isAdjacent([lr, lc], [r, c])) return false;
 
       if (selectedCells.length >= 2) {
         const [pr, pc] = selectedCells[selectedCells.length - 2];
         if (pr === r && pc === c) {
           const [rr, rc] = selectedCells.pop();
+          selectedCellSet.delete(cellKey(rr, rc));
           if (grid[rr][rc]) {
             grid[rr][rc].selected = false;
             selectedSumValue -= grid[rr][rc].value;
             const backEl = slotEls[rr][rc];
             if (backEl && backEl.classList && backEl.classList.contains('cell')) backEl.classList.remove('sel');
           }
-          updateSelectionStatus();
-          renderPathOverlay();
-          return;
+          if (!deferVisual) flushSelectionVisuals();
+          return true;
         }
       }
 
-      const exists = selectedCells.some(([sr, sc]) => sr === r && sc === c);
-      if (exists) return;
+      if (selectedCellSet.has(cellKey(r, c))) return false;
 
       selectedCells.push([r, c]);
+      selectedCellSet.add(cellKey(r, c));
       if (grid[r][c]) {
         grid[r][c].selected = true;
         selectedSumValue += grid[r][c].value;
         const el = slotEls[r][c];
         if (el && el.classList && el.classList.contains('cell')) el.classList.add('sel');
       }
-      updateSelectionStatus();
-      renderPathOverlay();
+      if (!deferVisual) flushSelectionVisuals();
+      return true;
     }
 
     function traceToPos(targetPos) {
-      if (!targetPos) return;
+      if (!targetPos) return false;
       if (selectedCells.length === 0) {
-        addPathCell(targetPos);
-        return;
+        const changed = addPathCell(targetPos, true);
+        if (changed) flushSelectionVisuals();
+        return changed;
       }
       let [r, c] = selectedCells[selectedCells.length - 1];
       const [tr, tc] = targetPos;
+      let changed = false;
 
       while (r !== tr || c !== tc) {
         const dr = tr - r;
@@ -828,8 +847,10 @@
         if (Math.abs(dc) >= Math.abs(dr) && dc !== 0) c += Math.sign(dc);
         else if (dr !== 0) r += Math.sign(dr);
         else if (dc !== 0) c += Math.sign(dc);
-        addPathCell([r, c]);
+        if (addPathCell([r, c], true)) changed = true;
       }
+      if (changed) flushSelectionVisuals();
+      return changed;
     }
 
     function renderPathOverlay() {
