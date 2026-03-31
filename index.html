@@ -55,6 +55,7 @@
       position: relative;
       width: fit-content;
       height: fit-content;
+      contain: layout paint;
     }
 
     .game-over {
@@ -162,6 +163,7 @@
       place-items: center;
       cursor: pointer;
       transform: translateZ(0);
+      will-change: transform, filter;
       transition: filter .08s linear, transform .08s linear;
       box-shadow: 0 2px 0 #00000018;
       position: relative;
@@ -576,8 +578,10 @@
     let score = 0;
     let best = Number(localStorage.getItem('apple-sum10-best') || 0);
     let selectedCells = [];
+    let selectedSumValue = 0;
     let dragging = false;
     let boardMetrics = null;
+    let cellCenters = [];
     let pendingDragPos = null;
     let dragRafId = 0;
     let audioCtx = null;
@@ -585,6 +589,7 @@
     let timerRafId = 0;
     let timerLastTs = 0;
     let isGameOver = false;
+    let pathLineEl = null;
 
     bestEl.textContent = String(best);
 
@@ -647,6 +652,7 @@
       slotEls = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
       score = 0;
       selectedCells = [];
+      selectedSumValue = 0;
       dragging = false;
       isGameOver = false;
       timeLeftMs = TIME_LIMIT_MS;
@@ -677,6 +683,7 @@
         }
       }
       selectedCells = [];
+      selectedSumValue = 0;
       sumEl.textContent = '0';
       renderPathOverlay();
     }
@@ -713,19 +720,7 @@
     }
 
     function getSlotCenterInBoard(r, c) {
-      if (!boardMetrics) {
-        const rect = boardEl.getBoundingClientRect();
-        const styles = getComputedStyle(boardEl);
-        const cell = parseFloat(styles.getPropertyValue('--cell'));
-        const gap = parseFloat(styles.gap || '0');
-        const padL = parseFloat(styles.paddingLeft || '0');
-        const padT = parseFloat(styles.paddingTop || '0');
-        boardMetrics = { rect, cell, gap, padL, padT, step: cell + gap };
-      }
-      return {
-        x: boardMetrics.padL + (c * boardMetrics.step) + (boardMetrics.cell / 2),
-        y: boardMetrics.padT + (r * boardMetrics.step) + (boardMetrics.cell / 2)
-      };
+      return cellCenters[r]?.[c] || null;
     }
 
     function resizeOverlay() {
@@ -736,6 +731,12 @@
       const padL = parseFloat(styles.paddingLeft || '0');
       const padT = parseFloat(styles.paddingTop || '0');
       boardMetrics = { rect, cell, gap, padL, padT, step: cell + gap };
+      cellCenters = Array.from({ length: ROWS }, (_, r) =>
+        Array.from({ length: COLS }, (_, c) => ({
+          x: padL + (c * (cell + gap)) + (cell / 2),
+          y: padT + (r * (cell + gap)) + (cell / 2)
+        }))
+      );
 
       dragLayerEl.style.width = `${rect.width}px`;
       dragLayerEl.style.height = `${rect.height}px`;
@@ -744,7 +745,7 @@
     }
 
     function selectedSum() {
-      return selectedCells.reduce((acc, [r, c]) => acc + (grid[r][c]?.value || 0), 0);
+      return selectedSumValue;
     }
 
     function selectedFilledCells() {
@@ -756,10 +757,9 @@
     }
 
     function updateSelectionStatus() {
-      const sum = selectedSum();
-      sumEl.textContent = String(sum);
-      if (sum === 10) setStatus('좋아요! 손을 떼면 사라집니다.', 'hint-ok');
-      else if (sum > 10) setStatus('10을 넘었습니다.', 'hint-no');
+      sumEl.textContent = String(selectedSumValue);
+      if (selectedSumValue === 10) setStatus('좋아요! 손을 떼면 사라집니다.', 'hint-ok');
+      else if (selectedSumValue > 10) setStatus('10을 넘었습니다.', 'hint-no');
       else setStatus('선을 이어 합계를 10으로 맞추세요.', '');
     }
 
@@ -770,6 +770,7 @@
         selectedCells.push([r, c]);
         if (grid[r][c]) {
           grid[r][c].selected = true;
+          selectedSumValue += grid[r][c].value;
           const firstEl = slotEls[r][c];
           if (firstEl && firstEl.classList && firstEl.classList.contains('cell')) firstEl.classList.add('sel');
         }
@@ -788,6 +789,7 @@
           const [rr, rc] = selectedCells.pop();
           if (grid[rr][rc]) {
             grid[rr][rc].selected = false;
+            selectedSumValue -= grid[rr][rc].value;
             const backEl = slotEls[rr][rc];
             if (backEl && backEl.classList && backEl.classList.contains('cell')) backEl.classList.remove('sel');
           }
@@ -803,6 +805,7 @@
       selectedCells.push([r, c]);
       if (grid[r][c]) {
         grid[r][c].selected = true;
+        selectedSumValue += grid[r][c].value;
         const el = slotEls[r][c];
         if (el && el.classList && el.classList.contains('cell')) el.classList.add('sel');
       }
@@ -830,8 +833,13 @@
     }
 
     function renderPathOverlay() {
-      if (!dragging || selectedCells.length === 0 || !boardMetrics) {
-        pathOverlayEl.innerHTML = '';
+      if (!pathLineEl) {
+        pathLineEl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        pathLineEl.setAttribute('class', 'path-line');
+        pathOverlayEl.appendChild(pathLineEl);
+      }
+      if (!dragging || selectedCells.length < 2 || !boardMetrics) {
+        pathLineEl.setAttribute('points', '');
         return;
       }
 
@@ -840,23 +848,7 @@
         return `${center.x},${center.y}`;
       }).join(' ');
 
-      pathOverlayEl.innerHTML = '';
-      if (selectedCells.length >= 2) {
-        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-        polyline.setAttribute('class', 'path-line');
-        polyline.setAttribute('points', points);
-        pathOverlayEl.appendChild(polyline);
-      }
-
-      for (const [r, c] of selectedCells) {
-        const center = getSlotCenterInBoard(r, c);
-        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        dot.setAttribute('class', 'path-dot');
-        dot.setAttribute('cx', String(center.x));
-        dot.setAttribute('cy', String(center.y));
-        dot.setAttribute('r', '3.2');
-        pathOverlayEl.appendChild(dot);
-      }
+      pathLineEl.setAttribute('points', points);
     }
 
     function spawnBombExplosion(r, c) {
