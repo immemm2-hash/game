@@ -115,19 +115,30 @@
       overflow: hidden;
     }
 
-    .fx-layer {
-      z-index: 2;
+    .path-overlay {
+      width: 100%;
+      height: 100%;
       overflow: visible;
     }
 
-    .marquee {
-      position: absolute;
-      border: 1px dashed #8ea29a;
-      background: #9fb4ad26;
-      box-shadow: inset 0 0 0 1px #ffffff9c;
-      display: none;
-      pointer-events: none;
-      border-radius: 10px;
+    .path-line {
+      fill: none;
+      stroke: #6c8f86;
+      stroke-width: 7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: .85;
+      filter: drop-shadow(0 1px 1px #ffffffbf);
+    }
+
+    .path-dot {
+      fill: #6c8f86;
+      opacity: .9;
+    }
+
+    .fx-layer {
+      z-index: 2;
+      overflow: visible;
     }
 
     .cell {
@@ -518,7 +529,7 @@
       <div id="boardStage" class="board-stage">
         <section id="board" class="board" aria-label="game board"></section>
         <div id="dragLayer" class="drag-layer" aria-hidden="true">
-          <div id="marquee" class="marquee"></div>
+          <svg id="pathOverlay" class="path-overlay" aria-hidden="true"></svg>
         </div>
         <div id="fxLayer" class="fx-layer" aria-hidden="true"></div>
         <div id="gameOverEl" class="game-over" aria-hidden="true">
@@ -558,15 +569,13 @@
     const gameOverEl = document.getElementById('gameOverEl');
     const resetBtn = document.getElementById('resetBtn');
 
-    const marqueeEl = document.getElementById('marquee');
+    const pathOverlayEl = document.getElementById('pathOverlay');
 
     let grid = [];
     let slotEls = [];
     let score = 0;
     let best = Number(localStorage.getItem('apple-sum10-best') || 0);
     let selectedCells = [];
-    let dragStart = null;
-    let dragEnd = null;
     let dragging = false;
     let boardMetrics = null;
     let pendingDragPos = null;
@@ -638,8 +647,6 @@
       slotEls = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
       score = 0;
       selectedCells = [];
-      dragStart = null;
-      dragEnd = null;
       dragging = false;
       isGameOver = false;
       timeLeftMs = TIME_LIMIT_MS;
@@ -671,7 +678,7 @@
       }
       selectedCells = [];
       sumEl.textContent = '0';
-      renderMarquee();
+      renderPathOverlay();
     }
 
     function setStatus(text, cls) {
@@ -740,77 +747,107 @@
       return selectedCells.reduce((acc, [r, c]) => acc + (grid[r][c]?.value || 0), 0);
     }
 
-    function updateSelectionByRect() {
-      if (!dragStart || !dragEnd) return;
+    function isAdjacent(a, b) {
+      return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
+    }
 
-      const minR = Math.min(dragStart[0], dragEnd[0]);
-      const maxR = Math.max(dragStart[0], dragEnd[0]);
-      const minC = Math.min(dragStart[1], dragEnd[1]);
-      const maxC = Math.max(dragStart[1], dragEnd[1]);
-      const prevSet = new Set(selectedCells.map(([r, c]) => `${r},${c}`));
-      const next = [];
-      const nextSet = new Set();
-      let sum = 0;
-
-      for (let r = minR; r <= maxR; r++) {
-        for (let c = minC; c <= maxC; c++) {
-          if (!grid[r][c]) continue;
-          next.push([r, c]);
-          nextSet.add(`${r},${c}`);
-          sum += grid[r][c].value;
-        }
-      }
-
-      for (const [r, c] of selectedCells) {
-        const key = `${r},${c}`;
-        if (!nextSet.has(key)) {
-          grid[r][c].selected = false;
-          const el = slotEls[r][c];
-          if (el && el.classList && el.classList.contains('cell')) el.classList.remove('sel');
-        }
-      }
-
-      for (const [r, c] of next) {
-        const key = `${r},${c}`;
-        if (!prevSet.has(key)) {
-          grid[r][c].selected = true;
-          const el = slotEls[r][c];
-          if (el && el.classList && el.classList.contains('cell')) el.classList.add('sel');
-        }
-      }
-
-      selectedCells = next;
+    function updateSelectionStatus() {
+      const sum = selectedSum();
       sumEl.textContent = String(sum);
       if (sum === 10) setStatus('좋아요! 손을 떼면 사라집니다.', 'hint-ok');
       else if (sum > 10) setStatus('10을 넘었습니다.', 'hint-no');
-      else setStatus('드래그 박스 안 합계를 10으로 맞추세요.', '');
-
-      renderMarquee();
+      else setStatus('선을 이어 합계를 10으로 맞추세요.', '');
     }
 
-    function renderMarquee() {
-      if (!dragging || !dragStart || !dragEnd) {
-        marqueeEl.style.display = 'none';
+    function addPathCell(pos) {
+      if (!pos) return;
+      const [r, c] = pos;
+      if (!grid[r][c]) return;
+      if (selectedCells.length === 0) {
+        selectedCells.push([r, c]);
+        grid[r][c].selected = true;
+        const firstEl = slotEls[r][c];
+        if (firstEl && firstEl.classList && firstEl.classList.contains('cell')) firstEl.classList.add('sel');
+        updateSelectionStatus();
+        renderPathOverlay();
         return;
       }
-      if (!boardMetrics) {
-        marqueeEl.style.display = 'none';
-        return;
-      }
-      const minR = Math.min(dragStart[0], dragEnd[0]);
-      const maxR = Math.max(dragStart[0], dragEnd[0]);
-      const minC = Math.min(dragStart[1], dragEnd[1]);
-      const maxC = Math.max(dragStart[1], dragEnd[1]);
-      const left = boardMetrics.padL + (minC * boardMetrics.step);
-      const top = boardMetrics.padT + (minR * boardMetrics.step);
-      const width = ((maxC - minC + 1) * boardMetrics.cell) + ((maxC - minC) * boardMetrics.gap);
-      const height = ((maxR - minR + 1) * boardMetrics.cell) + ((maxR - minR) * boardMetrics.gap);
 
-      marqueeEl.style.display = 'block';
-      marqueeEl.style.left = `${left}px`;
-      marqueeEl.style.top = `${top}px`;
-      marqueeEl.style.width = `${width}px`;
-      marqueeEl.style.height = `${height}px`;
+      const [lr, lc] = selectedCells[selectedCells.length - 1];
+      if (lr === r && lc === c) return;
+      if (!isAdjacent([lr, lc], [r, c])) return;
+
+      if (selectedCells.length >= 2) {
+        const [pr, pc] = selectedCells[selectedCells.length - 2];
+        if (pr === r && pc === c) {
+          const [rr, rc] = selectedCells.pop();
+          grid[rr][rc].selected = false;
+          const backEl = slotEls[rr][rc];
+          if (backEl && backEl.classList && backEl.classList.contains('cell')) backEl.classList.remove('sel');
+          updateSelectionStatus();
+          renderPathOverlay();
+          return;
+        }
+      }
+
+      const exists = selectedCells.some(([sr, sc]) => sr === r && sc === c);
+      if (exists) return;
+
+      selectedCells.push([r, c]);
+      grid[r][c].selected = true;
+      const el = slotEls[r][c];
+      if (el && el.classList && el.classList.contains('cell')) el.classList.add('sel');
+      updateSelectionStatus();
+      renderPathOverlay();
+    }
+
+    function traceToPos(targetPos) {
+      if (!targetPos) return;
+      if (selectedCells.length === 0) {
+        addPathCell(targetPos);
+        return;
+      }
+      let [r, c] = selectedCells[selectedCells.length - 1];
+      const [tr, tc] = targetPos;
+
+      while (r !== tr || c !== tc) {
+        const dr = tr - r;
+        const dc = tc - c;
+        if (Math.abs(dc) >= Math.abs(dr) && dc !== 0) c += Math.sign(dc);
+        else if (dr !== 0) r += Math.sign(dr);
+        else if (dc !== 0) c += Math.sign(dc);
+        addPathCell([r, c]);
+      }
+    }
+
+    function renderPathOverlay() {
+      if (!dragging || selectedCells.length === 0 || !boardMetrics) {
+        pathOverlayEl.innerHTML = '';
+        return;
+      }
+
+      const points = selectedCells.map(([r, c]) => {
+        const center = getSlotCenterInBoard(r, c);
+        return `${center.x},${center.y}`;
+      }).join(' ');
+
+      pathOverlayEl.innerHTML = '';
+      if (selectedCells.length >= 2) {
+        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute('class', 'path-line');
+        polyline.setAttribute('points', points);
+        pathOverlayEl.appendChild(polyline);
+      }
+
+      for (const [r, c] of selectedCells) {
+        const center = getSlotCenterInBoard(r, c);
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('class', 'path-dot');
+        dot.setAttribute('cx', String(center.x));
+        dot.setAttribute('cy', String(center.y));
+        dot.setAttribute('r', '3.2');
+        pathOverlayEl.appendChild(dot);
+      }
     }
 
     function spawnBombExplosion(r, c) {
@@ -909,9 +946,8 @@
         dragRafId = 0;
       }
       if (pendingDragPos) {
-        dragEnd = pendingDragPos;
+        traceToPos(pendingDragPos);
         pendingDragPos = null;
-        updateSelectionByRect();
       }
 
       const s = selectedSum();
@@ -921,7 +957,7 @@
         for (const [r, c] of selectedCells) spawnBombExplosion(r, c);
         for (const [r, c] of selectedCells) grid[r][c].dead = true;
         render();
-        renderMarquee();
+        renderPathOverlay();
 
         // [버그수정1] selectedCells를 스냅샷으로 캡처:
         // setTimeout 내부에서 외부 변수 selectedCells를 직접 참조하면,
@@ -933,17 +969,13 @@
           const removed = toRemove.length;
           for (const [r, c] of toRemove) if (grid[r][c]) grid[r][c] = null;
           clearSelections();
-          dragStart = null;
-          dragEnd = null;
           updateScore(removed * 10);
           setStatus(`${removed}개 제거`, 'hint-ok');
           render();
-          renderMarquee();
+          renderPathOverlay();
         }, 240);
       } else {
         clearSelections();
-        dragStart = null;
-        dragEnd = null;
         if (s === 0) setStatus('합이 10이 되도록 드래그하세요.', '');
         else setStatus('합계가 10이 아닙니다.', 'hint-no');
         render();
@@ -991,13 +1023,13 @@
       dragRafId = requestAnimationFrame(() => {
         dragRafId = 0;
         if (!pendingDragPos) return;
-        if (dragEnd && dragEnd[0] === pendingDragPos[0] && dragEnd[1] === pendingDragPos[1]) {
+        const last = selectedCells[selectedCells.length - 1];
+        if (last && last[0] === pendingDragPos[0] && last[1] === pendingDragPos[1]) {
           pendingDragPos = null;
           return;
         }
-        dragEnd = pendingDragPos;
+        traceToPos(pendingDragPos);
         pendingDragPos = null;
-        updateSelectionByRect();
       });
     }
 
@@ -1007,9 +1039,7 @@
       if (!pos) return;
       clearSelections();
       dragging = true;
-      dragStart = pos;
-      dragEnd = pos;
-      updateSelectionByRect();
+      addPathCell(pos);
       boardStageEl.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
@@ -1029,7 +1059,7 @@
     resetBtn.addEventListener('click', initGrid);
     window.addEventListener('resize', () => {
       resizeOverlay();
-      renderMarquee();
+      renderPathOverlay();
     });
 
     initGrid();
