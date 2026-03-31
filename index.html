@@ -1097,30 +1097,64 @@
       });
     }
 
-    boardStageEl.addEventListener('pointerdown', (e) => {
+    function startDragFromPoint(clientX, clientY) {
       if (isGameOver) return;
-      const pos = getGridPosFromPoint(e.clientX, e.clientY);
+      const pos = getGridPosFromPoint(clientX, clientY);
       if (!pos) return;
       clearSelections();
       dragging = true;
       addPathCell(pos);
+    }
+
+    function moveDragFromPoint(clientX, clientY) {
+      if (isGameOver) return;
+      if (!dragging) return;
+      const pos = getGridPosFromPoint(clientX, clientY);
+      if (!pos) return;
+      scheduleDragUpdate(pos);
+    }
+
+    boardStageEl.addEventListener('pointerdown', (e) => {
+      startDragFromPoint(e.clientX, e.clientY);
       boardStageEl.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
 
     boardStageEl.addEventListener('pointermove', (e) => {
-      if (isGameOver) return;
-      if (!dragging) return;
       const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
       const src = (coalesced && coalesced.length > 0) ? coalesced[coalesced.length - 1] : e;
-      const pos = getGridPosFromPoint(src.clientX, src.clientY);
-      if (!pos) return;
-      scheduleDragUpdate(pos);
+      moveDragFromPoint(src.clientX, src.clientY);
       e.preventDefault();
     });
 
     boardStageEl.addEventListener('pointerup', finishDrag);
     boardStageEl.addEventListener('pointercancel', finishDrag);
+
+    if (!window.PointerEvent) {
+      boardStageEl.addEventListener('touchstart', (e) => {
+        const t = e.changedTouches[0];
+        if (!t) return;
+        startDragFromPoint(t.clientX, t.clientY);
+        e.preventDefault();
+      }, { passive: false });
+
+      boardStageEl.addEventListener('touchmove', (e) => {
+        const t = e.changedTouches[0];
+        if (!t) return;
+        moveDragFromPoint(t.clientX, t.clientY);
+        e.preventDefault();
+      }, { passive: false });
+
+      boardStageEl.addEventListener('touchend', (e) => {
+        finishDrag();
+        e.preventDefault();
+      }, { passive: false });
+
+      boardStageEl.addEventListener('touchcancel', (e) => {
+        finishDrag();
+        e.preventDefault();
+      }, { passive: false });
+    }
 
     resetBtn.addEventListener('click', initGrid);
     window.addEventListener('resize', () => {
