@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ko">
 
 <head>
@@ -176,7 +176,7 @@
     }
 
     .cell.dead {
-      animation: vanish .24s cubic-bezier(.22,.74,.24,1) forwards;
+      animation: vanish .24s cubic-bezier(.22, .74, .24, 1) forwards;
     }
 
     .empty {
@@ -301,14 +301,17 @@
         transform: scale(1);
         opacity: 1;
       }
+
       22% {
         transform: scale(1.08);
         opacity: 1;
       }
+
       62% {
         transform: scale(0.86);
         opacity: 1;
       }
+
       to {
         transform: scale(0.28);
         opacity: 0;
@@ -348,10 +351,12 @@
         transform: translate(-50%, -50%) scale(.4);
         opacity: 0;
       }
+
       25% {
         transform: translate(-50%, calc(-50% - 6px)) scale(1.18);
         opacity: 1;
       }
+
       100% {
         transform: translate(-50%, calc(-50% - 18px)) scale(.96);
         opacity: 0;
@@ -850,6 +855,8 @@
         spark.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
       }
     }
+
+
 
     function ensureAudio() {
       if (!audioCtx) {
