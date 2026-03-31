@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ko">
 
 <head>
@@ -916,9 +916,15 @@
         render();
         renderMarquee();
 
+        // [버그수정1] selectedCells를 스냅샷으로 캡처:
+        // setTimeout 내부에서 외부 변수 selectedCells를 직접 참조하면,
+        // 120ms 이내에 새 드래그가 시작될 경우 새 선택 셀이 null 처리되는 치명적 버그.
+        const toRemove = [...selectedCells];
+        // [버그수정2] vanish 애니메이션 지속시간(240ms)에 맞춰 타임아웃을 240ms로 수정.
+        // 기존 120ms에서는 애니메이션이 절반만 재생된 상태로 DOM이 재생성되었음.
         setTimeout(() => {
-          const removed = selectedCells.length;
-          for (const [r, c] of selectedCells) grid[r][c] = null;
+          const removed = toRemove.length;
+          for (const [r, c] of toRemove) if (grid[r][c]) grid[r][c] = null;
           clearSelections();
           dragStart = null;
           dragEnd = null;
@@ -926,7 +932,7 @@
           setStatus(`${removed}개 제거`, 'hint-ok');
           render();
           renderMarquee();
-        }, 120);
+        }, 240);
       } else {
         clearSelections();
         dragStart = null;
