@@ -131,9 +131,43 @@
       opacity: .8;
     }
 
-    .path-dot {
-      fill: #6c8f86;
-      opacity: .9;
+    .perf .board {
+      background-color: var(--board-bg);
+      background-image: none;
+    }
+
+    .perf .cell {
+      border-width: 1px;
+      background: hsl(var(--tileHue, 26) 44% 60%);
+      text-shadow: none;
+      box-shadow: none;
+      transition: none;
+    }
+
+    .perf .cell::before {
+      display: none;
+    }
+
+    .perf .cell.dead {
+      animation: none;
+      opacity: .2;
+    }
+
+    .perf .path-line {
+      stroke-width: 4;
+      opacity: .72;
+    }
+
+    .perf .flash,
+    .perf .shockwave,
+    .perf .impact-core,
+    .perf .blast-star,
+    .perf .burst-glow,
+    .perf .shockwave-strong,
+    .perf .impact-text,
+    .perf .spark {
+      display: none !important;
+      animation: none !important;
     }
 
     .fx-layer {
@@ -179,12 +213,6 @@
       background: #81b66f;
       transform: rotate(-28deg);
       opacity: .9;
-    }
-
-    .cell.sel {
-      filter: brightness(1.06);
-      transform: translateY(-1px) scale(1.02);
-      box-shadow: 0 0 0 2px #ecdfc9, 0 3px 6px #00000018;
     }
 
     .cell.dead {
@@ -422,6 +450,8 @@
       bottom: 0;
       background: linear-gradient(to top, #ff7ebe, #ffb17f);
       height: 100%;
+      transform-origin: bottom;
+      will-change: transform;
     }
 
     .bottom {
@@ -556,6 +586,7 @@
     const MIN = 1;
     const MAX = 9;
     const TIME_LIMIT_MS = 60000;
+    const PERFORMANCE_MODE = true;
 
     const boardEl = document.getElementById('board');
     const boardStageEl = document.getElementById('boardStage');
@@ -571,6 +602,10 @@
     const resetBtn = document.getElementById('resetBtn');
 
     const pathOverlayEl = document.getElementById('pathOverlay');
+
+    if (PERFORMANCE_MODE) {
+      document.documentElement.classList.add('perf');
+    }
 
     let grid = [];
     let slotEls = [];
@@ -588,6 +623,8 @@
     let timeLeftMs = TIME_LIMIT_MS;
     let timerRafId = 0;
     let timerLastTs = 0;
+    let timerUiTs = 0;
+    let shownTimerSec = -1;
     let isGameOver = false;
     let pathLineEl = null;
     let lastStatusText = '';
@@ -600,13 +637,17 @@
     }
 
     function makeCell() {
-      return { value: randInt(MIN, MAX), selected: false, dead: false };
+      return { value: randInt(MIN, MAX), dead: false };
     }
 
-    function updateMeter() {
+    function updateMeter(force = false) {
       const ratio = Math.max(0, Math.min(1, timeLeftMs / TIME_LIMIT_MS));
-      meterFillEl.style.height = `${ratio * 100}%`;
-      timerTextEl.textContent = String(Math.ceil(timeLeftMs / 1000));
+      meterFillEl.style.transform = `scaleY(${ratio})`;
+      const sec = Math.ceil(timeLeftMs / 1000);
+      if (force || sec !== shownTimerSec) {
+        shownTimerSec = sec;
+        timerTextEl.textContent = String(sec);
+      }
     }
 
     function stopTimer() {
@@ -614,6 +655,7 @@
       cancelAnimationFrame(timerRafId);
       timerRafId = 0;
       timerLastTs = 0;
+      timerUiTs = 0;
     }
 
     function onTimeOver() {
@@ -636,8 +678,12 @@
       const dt = ts - timerLastTs;
       timerLastTs = ts;
       timeLeftMs = Math.max(0, timeLeftMs - dt);
-      updateMeter();
+      if (!timerUiTs || (ts - timerUiTs) >= 50 || timeLeftMs <= 0) {
+        timerUiTs = ts;
+        updateMeter();
+      }
       if (timeLeftMs <= 0) {
+        updateMeter(true);
         onTimeOver();
         return;
       }
@@ -660,8 +706,9 @@
       isGameOver = false;
       timeLeftMs = TIME_LIMIT_MS;
       gameOverEl.classList.remove('show');
+      shownTimerSec = -1;
       updateScore(0);
-      updateMeter();
+      updateMeter(true);
       render();
       startTimer();
       setStatus('합이 10이 되도록 드래그하세요.', '');
@@ -678,13 +725,6 @@
     }
 
     function clearSelections() {
-      for (const [r, c] of selectedCells) {
-        if (grid[r][c]) grid[r][c].selected = false;
-        const el = slotEls[r][c];
-        if (el && el.classList && el.classList.contains('cell')) {
-          el.classList.remove('sel');
-        }
-      }
       selectedCells = [];
       selectedCellSet = new Set();
       selectedSumValue = 0;
@@ -787,10 +827,7 @@
         selectedCells.push([r, c]);
         selectedCellSet.add(cellKey(r, c));
         if (grid[r][c]) {
-          grid[r][c].selected = true;
           selectedSumValue += grid[r][c].value;
-          const firstEl = slotEls[r][c];
-          if (firstEl && firstEl.classList && firstEl.classList.contains('cell')) firstEl.classList.add('sel');
         }
         if (!deferVisual) flushSelectionVisuals();
         return true;
@@ -806,10 +843,7 @@
           const [rr, rc] = selectedCells.pop();
           selectedCellSet.delete(cellKey(rr, rc));
           if (grid[rr][rc]) {
-            grid[rr][rc].selected = false;
             selectedSumValue -= grid[rr][rc].value;
-            const backEl = slotEls[rr][rc];
-            if (backEl && backEl.classList && backEl.classList.contains('cell')) backEl.classList.remove('sel');
           }
           if (!deferVisual) flushSelectionVisuals();
           return true;
@@ -821,10 +855,7 @@
       selectedCells.push([r, c]);
       selectedCellSet.add(cellKey(r, c));
       if (grid[r][c]) {
-        grid[r][c].selected = true;
         selectedSumValue += grid[r][c].value;
-        const el = slotEls[r][c];
-        if (el && el.classList && el.classList.contains('cell')) el.classList.add('sel');
       }
       if (!deferVisual) flushSelectionVisuals();
       return true;
@@ -955,6 +986,7 @@
     }
 
     function triggerHitFeedback(count) {
+      if (PERFORMANCE_MODE) return;
       if (navigator.vibrate) navigator.vibrate(8);
       playHitSound(Math.min(1.0, 0.72 + (count * 0.04)));
     }
@@ -975,28 +1007,37 @@
       const s = selectedSum();
       const toHit = selectedFilledCells();
       if (s === 10 && toHit.length > 0) {
-        resizeOverlay();
-        triggerHitFeedback(toHit.length);
-        for (const [r, c] of toHit) spawnBombExplosion(r, c);
-        for (const [r, c] of toHit) grid[r][c].dead = true;
-        render();
-        renderPathOverlay();
-
-        // [버그수정1] selectedCells를 스냅샷으로 캡처:
-        // setTimeout 내부에서 외부 변수 selectedCells를 직접 참조하면,
-        // 120ms 이내에 새 드래그가 시작될 경우 새 선택 셀이 null 처리되는 치명적 버그.
-        const toRemove = [...toHit];
-        // [버그수정2] vanish 애니메이션 지속시간(240ms)에 맞춰 타임아웃을 240ms로 수정.
-        // 기존 120ms에서는 애니메이션이 절반만 재생된 상태로 DOM이 재생성되었음.
-        setTimeout(() => {
-          const removed = toRemove.length;
-          for (const [r, c] of toRemove) if (grid[r][c]) grid[r][c] = null;
+        if (PERFORMANCE_MODE) {
+          const removed = toHit.length;
+          for (const [r, c] of toHit) if (grid[r][c]) grid[r][c] = null;
           clearSelections();
           updateScore(removed * 10);
           setStatus(`${removed}개 제거`, 'hint-ok');
           render();
           renderPathOverlay();
-        }, 240);
+        } else {
+          resizeOverlay();
+          triggerHitFeedback(toHit.length);
+          const fxStep = Math.max(1, Math.ceil(toHit.length / 8));
+          for (let i = 0; i < toHit.length; i += fxStep) {
+            const [r, c] = toHit[i];
+            spawnBombExplosion(r, c);
+          }
+          for (const [r, c] of toHit) grid[r][c].dead = true;
+          render();
+          renderPathOverlay();
+
+          const toRemove = [...toHit];
+          setTimeout(() => {
+            const removed = toRemove.length;
+            for (const [r, c] of toRemove) if (grid[r][c]) grid[r][c] = null;
+            clearSelections();
+            updateScore(removed * 10);
+            setStatus(`${removed}개 제거`, 'hint-ok');
+            render();
+            renderPathOverlay();
+          }, 240);
+        }
       } else {
         clearSelections();
         if (s === 0) setStatus('합이 10이 되도록 드래그하세요.', '');
@@ -1021,7 +1062,7 @@
           }
           const d = document.createElement('button');
           d.type = 'button';
-          d.className = `slot cell${it.selected ? ' sel' : ''}${it.dead ? ' dead' : ''}`;
+          d.className = `slot cell${it.dead ? ' dead' : ''}`;
           d.dataset.r = String(r);
           d.dataset.c = String(c);
           d.dataset.value = String(it.value);
@@ -1070,7 +1111,9 @@
     boardStageEl.addEventListener('pointermove', (e) => {
       if (isGameOver) return;
       if (!dragging) return;
-      const pos = getGridPosFromPoint(e.clientX, e.clientY);
+      const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+      const src = (coalesced && coalesced.length > 0) ? coalesced[coalesced.length - 1] : e;
+      const pos = getGridPosFromPoint(src.clientX, src.clientY);
       if (!pos) return;
       scheduleDragUpdate(pos);
       e.preventDefault();
