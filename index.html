@@ -631,8 +631,8 @@
     body.mobile {
       display: block;
       padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
-      --cell: min(5vw, 33px);
-      --gap: min(0.38vw, 3px);
+      --cell: clamp(20px, 5.8vw, 26px);
+      --gap: 1px;
     }
 
     body.mobile .game {
@@ -695,11 +695,17 @@
     }
 
     body.mobile .board {
+      padding: 6px;
       min-height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
     }
 
     body.mobile .meter {
       height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
+    }
+
+    body.mobile .cell {
+      border-width: 1px;
+      font-size: clamp(16px, 4.2vw, 20px);
     }
 
     body.mobile .bottom {
@@ -819,6 +825,7 @@
     let lastStatusCls = '';
     let ranking = [];
     let hasSubmittedScore = false;
+    let touchActive = false;
 
     bestEl.textContent = String(best);
     renderRanking();
@@ -1385,46 +1392,55 @@
     }
 
     boardStageEl.addEventListener('pointerdown', (e) => {
+      if (touchActive && e.pointerType === 'touch') return;
       startDragFromPoint(e.clientX, e.clientY);
-      boardStageEl.setPointerCapture(e.pointerId);
+      if (boardStageEl.setPointerCapture) boardStageEl.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
 
     boardStageEl.addEventListener('pointermove', (e) => {
+      if (touchActive && e.pointerType === 'touch') return;
       const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
       const src = (coalesced && coalesced.length > 0) ? coalesced[coalesced.length - 1] : e;
       moveDragFromPoint(src.clientX, src.clientY);
       e.preventDefault();
     });
 
-    boardStageEl.addEventListener('pointerup', finishDrag);
-    boardStageEl.addEventListener('pointercancel', finishDrag);
+    boardStageEl.addEventListener('pointerup', (e) => {
+      if (touchActive && e.pointerType === 'touch') return;
+      finishDrag();
+    });
+    boardStageEl.addEventListener('pointercancel', (e) => {
+      if (touchActive && e.pointerType === 'touch') return;
+      finishDrag();
+    });
 
-    if (!window.PointerEvent) {
-      boardStageEl.addEventListener('touchstart', (e) => {
-        const t = e.changedTouches[0];
-        if (!t) return;
-        startDragFromPoint(t.clientX, t.clientY);
-        e.preventDefault();
-      }, { passive: false });
+    boardStageEl.addEventListener('touchstart', (e) => {
+      touchActive = true;
+      const t = e.touches[0] || e.changedTouches[0];
+      if (!t) return;
+      startDragFromPoint(t.clientX, t.clientY);
+      e.preventDefault();
+    }, { passive: false });
 
-      boardStageEl.addEventListener('touchmove', (e) => {
-        const t = e.changedTouches[0];
-        if (!t) return;
-        moveDragFromPoint(t.clientX, t.clientY);
-        e.preventDefault();
-      }, { passive: false });
+    boardStageEl.addEventListener('touchmove', (e) => {
+      const t = e.touches[0] || e.changedTouches[0];
+      if (!t) return;
+      moveDragFromPoint(t.clientX, t.clientY);
+      e.preventDefault();
+    }, { passive: false });
 
-      boardStageEl.addEventListener('touchend', (e) => {
-        finishDrag();
-        e.preventDefault();
-      }, { passive: false });
+    boardStageEl.addEventListener('touchend', (e) => {
+      finishDrag();
+      if (!e.touches || e.touches.length === 0) touchActive = false;
+      e.preventDefault();
+    }, { passive: false });
 
-      boardStageEl.addEventListener('touchcancel', (e) => {
-        finishDrag();
-        e.preventDefault();
-      }, { passive: false });
-    }
+    boardStageEl.addEventListener('touchcancel', (e) => {
+      finishDrag();
+      touchActive = false;
+      e.preventDefault();
+    }, { passive: false });
 
     resetBtn.addEventListener('click', initGrid);
     window.addEventListener('resize', () => {
