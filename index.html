@@ -22,7 +22,6 @@
       box-sizing: border-box;
       user-select: none;
       -webkit-user-select: none;
-      touch-action: none;
     }
 
     body {
@@ -57,6 +56,7 @@
       width: fit-content;
       height: fit-content;
       contain: layout paint;
+      touch-action: none;
     }
 
     .game-over {
@@ -627,6 +627,92 @@
         height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
       }
     }
+
+    body.mobile {
+      display: block;
+      padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
+      --cell: min(5vw, 33px);
+      --gap: min(0.38vw, 3px);
+    }
+
+    body.mobile .game {
+      width: 100vw;
+      min-height: 100svh;
+      border-radius: 0;
+      padding: 10px 10px 12px;
+      border-left: 0;
+      border-right: 0;
+    }
+
+    body.mobile .hud {
+      position: static;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    body.mobile .status {
+      position: static;
+      margin-bottom: 8px;
+      max-width: 100%;
+      text-align: left;
+      white-space: normal;
+    }
+
+    body.mobile .play-wrap {
+      grid-template-columns: 1fr 22px;
+      gap: 8px;
+    }
+
+    body.mobile .board-stage {
+      grid-column: 1;
+      justify-self: center;
+    }
+
+    body.mobile .meter {
+      grid-column: 2;
+    }
+
+    body.mobile .ranking {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      width: 100%;
+      min-height: 0;
+      padding: 8px;
+    }
+
+    body.mobile .ranking h3 {
+      margin-bottom: 6px;
+    }
+
+    body.mobile .ranking-list {
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      max-height: 220px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    body.mobile .board {
+      min-height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
+    }
+
+    body.mobile .meter {
+      height: calc(10 * var(--cell) + 9 * var(--gap) + 14px);
+    }
+
+    body.mobile .bottom {
+      height: auto;
+      padding-top: 8px;
+    }
+
+    body.mobile #resetBtn {
+      height: 40px;
+      min-width: 120px;
+      font-size: 16px;
+      box-shadow: 0 3px 0 #df5d92;
+    }
   </style>
 </head>
 
@@ -696,6 +782,18 @@
     if (PERFORMANCE_MODE) {
       document.documentElement.classList.add('perf');
     }
+
+    function isMobileClient() {
+      const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      const narrow = window.innerWidth <= 900;
+      return coarse || narrow;
+    }
+
+    function applyDeviceMode() {
+      document.body.classList.toggle('mobile', isMobileClient());
+    }
+
+    applyDeviceMode();
 
     let grid = [];
     let slotEls = [];
@@ -1330,9 +1428,11 @@
 
     resetBtn.addEventListener('click', initGrid);
     window.addEventListener('resize', () => {
+      applyDeviceMode();
       resizeOverlay();
       renderPathOverlay();
     });
+    window.addEventListener('orientationchange', applyDeviceMode);
 
     initGrid();
   </script>
