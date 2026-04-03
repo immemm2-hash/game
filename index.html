@@ -462,6 +462,7 @@
       justify-content: flex-start;
       align-items: center;
       padding: 3px 6px 0;
+      gap: 8px;
       color: #f7ffe0;
       font-size: 24px;
     }
@@ -483,6 +484,26 @@
     #resetBtn:active {
       transform: translateY(2px);
       box-shadow: 0 2px 0 #df5d92;
+    }
+
+    #rankingToggleBtn {
+      display: none;
+      min-width: 96px;
+      height: 32px;
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(to bottom, #8ec5ff, #6ea0ef);
+      color: #fff;
+      font: 800 14px/1 "Trebuchet MS", Arial, sans-serif;
+      padding: 0 14px 1px;
+      cursor: pointer;
+      letter-spacing: .2px;
+      box-shadow: 0 4px 0 #4d79c4;
+    }
+
+    #rankingToggleBtn:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #4d79c4;
     }
 
     .hud {
@@ -631,7 +652,7 @@
     body.mobile {
       display: block;
       padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
-      --cell: clamp(20px, 5.8vw, 26px);
+      --cell: clamp(20px, 6.1vw, 24px);
       --gap: 1px;
     }
 
@@ -661,25 +682,62 @@
     }
 
     body.mobile .play-wrap {
-      grid-template-columns: 1fr 22px;
+      grid-template-columns: 1fr;
       gap: 8px;
     }
 
     body.mobile .board-stage {
       grid-column: 1;
+      grid-row: 2;
       justify-self: center;
     }
 
     body.mobile .meter {
-      grid-column: 2;
+      grid-column: 1 / -1;
+      grid-row: 1;
+      width: 100%;
+      height: auto;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: 1fr;
+      align-items: center;
+      justify-items: stretch;
+      gap: 8px;
+      font-size: 18px;
+      color: #7f6298;
+      font-weight: 900;
+    }
+
+    body.mobile .meter .zero {
+      margin: 0;
+      min-width: 36px;
+      text-align: right;
+      line-height: 1;
+    }
+
+    body.mobile .meter-track {
+      width: 100%;
+      height: 12px;
+      margin-top: 0;
+    }
+
+    body.mobile .meter-fill {
+      top: 0;
+      right: auto;
+      transform-origin: left;
     }
 
     body.mobile .ranking {
       grid-column: 1 / -1;
-      grid-row: 2;
+      grid-row: 3;
       width: 100%;
       min-height: 0;
       padding: 8px;
+      display: none;
+    }
+
+    body.mobile.ranking-open .ranking {
+      display: block;
     }
 
     body.mobile .ranking h3 {
@@ -711,6 +769,8 @@
     body.mobile .bottom {
       height: auto;
       padding-top: 8px;
+      padding-left: 0;
+      padding-right: 0;
     }
 
     body.mobile #resetBtn {
@@ -718,6 +778,16 @@
       min-width: 120px;
       font-size: 16px;
       box-shadow: 0 3px 0 #df5d92;
+    }
+
+    body.mobile #rankingToggleBtn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 40px;
+      min-width: 120px;
+      font-size: 15px;
+      box-shadow: 0 3px 0 #4d79c4;
     }
   </style>
 </head>
@@ -756,6 +826,7 @@
 
     <footer class="bottom">
       <button id="resetBtn" type="button">새로 시작</button>
+      <button id="rankingToggleBtn" type="button">랭킹 보기</button>
     </footer>
   </main>
 
@@ -781,6 +852,7 @@
     const timerTextEl = document.getElementById('timerText');
     const gameOverEl = document.getElementById('gameOverEl');
     const resetBtn = document.getElementById('resetBtn');
+    const rankingToggleBtn = document.getElementById('rankingToggleBtn');
     const rankingListEl = document.getElementById('rankingList');
 
     const pathOverlayEl = document.getElementById('pathOverlay');
@@ -795,8 +867,23 @@
       return coarse || narrow;
     }
 
+    function syncRankingToggleUI() {
+      if (!rankingToggleBtn) return;
+      const isMobile = document.body.classList.contains('mobile');
+      if (!isMobile) {
+        document.body.classList.remove('ranking-open');
+        rankingToggleBtn.textContent = '랭킹 보기';
+        return;
+      }
+      document.body.classList.toggle('ranking-open', mobileRankingVisible);
+      rankingToggleBtn.textContent = mobileRankingVisible ? '랭킹 숨기기' : '랭킹 보기';
+    }
+
     function applyDeviceMode() {
-      document.body.classList.toggle('mobile', isMobileClient());
+      const mobile = isMobileClient();
+      if (!mobile) mobileRankingVisible = false;
+      document.body.classList.toggle('mobile', mobile);
+      syncRankingToggleUI();
     }
 
     applyDeviceMode();
@@ -826,6 +913,7 @@
     let ranking = [];
     let hasSubmittedScore = false;
     let touchActive = false;
+    let mobileRankingVisible = false;
 
     bestEl.textContent = String(best);
     renderRanking();
@@ -917,7 +1005,9 @@
 
     function updateMeter(force = false) {
       const ratio = Math.max(0, Math.min(1, timeLeftMs / TIME_LIMIT_MS));
-      meterFillEl.style.transform = `scaleY(${ratio})`;
+      meterFillEl.style.transform = document.body.classList.contains('mobile')
+        ? `scaleX(${ratio})`
+        : `scaleY(${ratio})`;
       const sec = Math.ceil(timeLeftMs / 1000);
       if (force || sec !== shownTimerSec) {
         shownTimerSec = sec;
@@ -1443,6 +1533,10 @@
     }, { passive: false });
 
     resetBtn.addEventListener('click', initGrid);
+    rankingToggleBtn.addEventListener('click', () => {
+      mobileRankingVisible = !mobileRankingVisible;
+      syncRankingToggleUI();
+    });
     window.addEventListener('resize', () => {
       applyDeviceMode();
       resizeOverlay();
