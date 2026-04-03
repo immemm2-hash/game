@@ -674,7 +674,7 @@
     const MAX = 9;
     const TIME_LIMIT_MS = 180000;
     const PERFORMANCE_MODE = true;
-    const RANKING_KEY = 'apple-sum10-ranking-v1';
+    const RANKING_API_URL = '/api/ranking';
     const RANKING_LIMIT = 10;
 
     const boardEl = document.getElementById('board');
@@ -719,11 +719,12 @@
     let pathLineEl = null;
     let lastStatusText = '';
     let lastStatusCls = '';
-    let ranking = loadRanking();
+    let ranking = [];
     let hasSubmittedScore = false;
 
     bestEl.textContent = String(best);
     renderRanking();
+    fetchRanking();
 
     function randInt(a, b) {
       return Math.floor(Math.random() * (b - a + 1)) + a;
@@ -733,45 +734,50 @@
       return { value: randInt(MIN, MAX), dead: false };
     }
 
-    function loadRanking() {
-      try {
-        const raw = localStorage.getItem(RANKING_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        return parsed
-          .filter((it) => it && typeof it.name === 'string' && Number.isFinite(it.score))
-          .map((it) => ({ name: it.name.slice(0, 12), score: Math.max(0, Math.floor(it.score)) }))
-          .sort((a, b) => b.score - a.score)
-          .slice(0, RANKING_LIMIT);
-      } catch {
-        return [];
-      }
-    }
-
-    function saveRanking() {
-      localStorage.setItem(RANKING_KEY, JSON.stringify(ranking));
-    }
-
     function sanitizeName(name) {
       const trimmed = String(name || '').trim().replace(/\s+/g, ' ');
       if (!trimmed) return '플레이어';
       return trimmed.slice(0, 12);
     }
 
-    function isRankable(scoreValue) {
-      if (scoreValue <= 0) return false;
-      if (ranking.length < RANKING_LIMIT) return true;
-      const last = ranking[ranking.length - 1];
-      return !!last && scoreValue > last.score;
+    function normalizeRankingList(items) {
+      const source = Array.isArray(items) ? items : (items ? [items] : []);
+      return source
+        .filter((it) => it && typeof it.name === 'string' && Number.isFinite(Number(it.score)))
+        .map((it) => ({ name: sanitizeName(it.name), score: Math.max(0, Math.floor(Number(it.score))) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, RANKING_LIMIT);
     }
 
-    function addRankingEntry(name, scoreValue) {
-      ranking.push({ name: sanitizeName(name), score: Math.max(0, Math.floor(scoreValue)) });
-      ranking.sort((a, b) => b.score - a.score);
-      ranking = ranking.slice(0, RANKING_LIMIT);
-      saveRanking();
-      renderRanking();
+    async function fetchRanking() {
+      try {
+        const res = await fetch(RANKING_API_URL, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        ranking = normalizeRankingList(data?.ranking);
+        renderRanking();
+      } catch {
+        // server unavailable: keep current list
+      }
+    }
+
+    async function addRankingEntry(name, scoreValue) {
+      try {
+        const res = await fetch(RANKING_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: sanitizeName(name),
+            score: Math.max(0, Math.floor(scoreValue))
+          })
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        ranking = normalizeRankingList(data?.ranking);
+        renderRanking();
+      } catch {
+        // ignore network errors
+      }
     }
 
     function renderRanking() {
@@ -798,10 +804,10 @@
     function submitScoreToRanking() {
       if (hasSubmittedScore) return;
       hasSubmittedScore = true;
-      if (!isRankable(score)) return;
+      if (score <= 0) return;
       const input = window.prompt('랭킹에 등록할 닉네임을 입력하세요. (최대 12자)', '플레이어');
       if (input === null) return;
-      addRankingEntry(input, score);
+      void addRankingEntry(input, score);
     }
 
     function updateMeter(force = false) {
